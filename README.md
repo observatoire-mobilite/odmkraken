@@ -1,2 +1,2 @@
-# kraken
-The **kraken** is the orchestration layer responsible for gathering and postprocessing ODM's mobility data
+# 🐙 The ODM Kraken
+The **kraken** is the orchestration layer of the Ministry of Mobility's ODM data infrastructure, responsible for gathering and postprocessing mobility data.
