@@ -2,11 +2,10 @@ import typing
 import psycopg2
 from contextlib import contextmanager
 import dagster
-from . import DBconnector
 import warnings
 
 
-class PostgresConnector(DBconnector):
+class PostgresConnector:
     """Convenience wrapper around a `psycopg2 connection."""
 
     def __init__(self, dsn: str):
