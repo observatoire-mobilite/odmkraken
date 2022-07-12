@@ -5,7 +5,8 @@ authors = [
 ]
 dependencies = [
     "dagster >=0.15.3",
-    "psycopg2"
+    "psycopg2",
+    "mapmatcher"
 ]
 
 [build-system]
