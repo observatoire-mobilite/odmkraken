@@ -36,12 +36,12 @@ class EDMOBusData(EDMOData):
     def get_timeframes_by_file(self, file_id: uuid.UUID) -> typing.Iterator[VehicleTimeFrame]:
         """Return all vehicle timeframes contained in a given file."""
         with self.store.query(SQL_TIMEFRAMES_FILE, file_id) as cur:
-            return (VehicleTimeFrame(*row) for row in cur)
+            return [VehicleTimeFrame(*row) for row in cur]
 
     def get_timeframes_on(self, t0: pendulum.DateTime, tf: pendulum.DateTime) -> typing.Iterator[VehicleTimeFrame]:
         """Return all vehicle timeframes contained in a given file."""
         with self.store.query(SQL_TIMEFRAMES_PERIOD, t0, tf) as cur:
-            return (VehicleTimeFrame(*row) for row in cur)
+            return [VehicleTimeFrame(*row) for row in cur]
 
     def get_pings(self, tf: VehicleTimeFrame):
         """Get all pings making up `tf`."""
@@ -63,6 +63,35 @@ class EDMOBusData(EDMOData):
         """Get roads physically clos to given point at given time"""
         with self.store.callproc('road_network.nearby_roads', x, y) as cur:
             yield from cur
+
+    def check_file_already_imported(self, checksum: bytes):
+        SQL = 'select * from bus_data.data_files where checksum=%s'
+        with self.store.query(SQL, checksum) as cur:
+            return cur.rowcount > 0
+
+    def import_csv_file(self, handle, file, checksum, sep: str=',', date: str='YYYY-MM-DD'):
+        self.store.run('call bus_data.create_staging_table();')
+        self.store.copy_from(handle, ('bus_data', 'raw_data'), separator=sep)
+        self.store.run('call bus_data.adjust_format(%s);', date)
+
+        with self.store.cursor() as cur:
+            cur.execute('call bus_data.extract_vehicles()')
+            cur.execute('call bus_data.extract_vehicles()')
+            cur.execute('call bus_data.extract_lines()')
+            cur.execute('call bus_data.extract_stops()')
+            cur.execute('call bus_data.extract_runs_with_timeframes()')
+            timeframes = cur.fetchall()
+            cur.execute('call bus_data.extract_pings()')
+            
+            sql = 'insert into "bus_data"."data_files" (id, filename, imported_on, checksum) values (gen_random_uuid(), %s, now(), %s) returning id'
+            cur.execute(sql, (str(file), checksum))
+            file_id = cur.fetchone()[0]
+        
+            sql = 'insert into "bus_data"."data_file_timeframes"(id, file_id, vehicle_id, time_start, time_end) values (gen_random_uuid(), %s, %s, %s, %s);'
+            self.store.execute_batch(sql, [(str(file_id), *t) for t in timeframes], cursor=cur)
+    
+            cur.execute(f'drop table if exists "bus_data"."raw_data";')     
+        
 
 
 @dagster.resource(required_resource_keys={'postgres_connection'})

@@ -1,9 +1,11 @@
 import typing
 import psycopg2
+from psycopg2 import sql
+from psycopg2.extras import execute_batch
 from contextlib import contextmanager
 import dagster
 import warnings
-
+from io import TextIOBase
 
 class PostgresConnector:
     """Convenience wrapper around a `psycopg2 connection."""
@@ -49,11 +51,42 @@ class PostgresConnector:
             cur.callproc(proc, args)
             yield cur
 
+    def run(self, sql: str, *args, **kwargs):
+        with self.cursor(**kwargs) as cur:
+            cur.execute(sql, args)
+
+    def fetchone(self, *args, **kwargs):
+        with self.execute(*args, **kwargs) as cur:
+            return cur.fetchone()
+
+    def fetchall(self, *args, **kwargs):
+        with self.execute(*args, **kwargs) as cur:
+            return cur.fetchall()
+
     def close(self):
         if self._conn is None:
             warnings.warn('trying to close database connection, but was never connected')
             return
         self._conn.close() 
+
+
+    def copy_from(self, handle: TextIOBase, table: typing.Union[str, sql.Identifier, typing.Tuple[str, str]], separator: str=','):
+        if isinstance(table, tuple):
+            tbl_id = sql.Identifier(*table)
+        elif isinstance(table, str):
+            tbl_id = sql.Identifier(table)
+        else:
+            tbl_id = table
+        
+        with self.cursor() as cur:
+            sep_lit = sql.Literal(cur.mogrify(separator))
+            query = sql.SQL('COPY {} FROM STDIN WITH (FORMAT csv, DELIMITER {}, HEADER 1)').format(tbl_id, sep_lit)
+            cur.copy_expert(query, handle)
+
+    def execute_batch(self, query: str, data: typing.List[typing.Tuple[typing.Any, ...]], cursor=None):
+        cursor = self.cursor() if cursor is None else cursor
+        execute_batch(cursor, query, data)
+
 
 
 @dagster.resource
