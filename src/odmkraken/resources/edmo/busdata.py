@@ -7,6 +7,8 @@ import pandas as pd
 from datetime import datetime
 from dataclasses import dataclass
 import uuid
+from mapmatcher.pathfinder.nx import NXPathFinderWithLocalCache
+
 
 
 SQL_TIMEFRAMES_FILE='select id, vehicle_id, time_start, time_end from bus_data.data_file_timeframes where file_id=%s'
@@ -66,3 +68,10 @@ class EDMOBusData(EDMOData):
 @dagster.resource(required_resource_keys={'postgres_connection'})
 def edmo_bus_data(init_context: dagster.InitResourceContext) -> EDMOBusData:
     return EDMOBusData(init_context.resources.postgres_connection)
+
+
+@dagster.resource(required_resource_keys={'edmo_bus_data'})
+def shortest_path_engine(context: dagster.InitResourceContext) -> NXPathFinderWithLocalCache:
+    # set up shortest path engine over entire road graph
+    with context.resources.edmo_bus_data.get_edgelist() as cur:
+        return NXPathFinderWithLocalCache(cur)

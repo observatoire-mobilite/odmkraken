@@ -2,7 +2,6 @@ import dagster
 import typing
 from datetime import datetime
 from mapmatcher import Itinerary, reconstruct_optimal_path, ProjectLinear, Scorer, candidate_solution
-from mapmatcher.pathfinder.nx import NXPathFinderWithLocalCache
 from odmkraken.resources.edmo.busdata import VehicleTimeFrame
 
 
@@ -12,13 +11,6 @@ def load_vehicle_timeframes(context: dagster.OpExecutionContext) -> typing.Itera
     dates = context.op_config['date_from'], context.op_config['date_to']
     for tf in  context.resources.edmo_bus_data.get_timeframes_on(*dates):
         yield dagster.DynamicOutput(tf, mapping_key=str(tf.id.hex))
-
-
-@dagster.resource(required_resource_keys={'edmo_bus_data'})
-def shortest_path_engine(context: dagster.InitResourceContext) -> NXPathFinderWithLocalCache:
-    # set up shortest path engine over entire road graph
-    with context.resources.edmo_bus_data.get_edgelist() as cur:
-        return NXPathFinderWithLocalCache(cur)
 
 
 @dagster.op(required_resource_keys={'edmo_bus_data', 'shortest_path_engine'})
