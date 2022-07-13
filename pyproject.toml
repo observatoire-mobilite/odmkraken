@@ -1,17 +1,25 @@
 [project]
-name = "odmkraken"
-authors = [
-    { name = "Gil Georges", email = "gil.georges@mob.etat.lu" }
-]
-dependencies = [
-    "dagster >=0.15.3",
-    "psycopg2",
-    "mapmatcher"
-]
+    description = "OdmKraken"
+    name = "odmkraken"
+    authors = [
+        { name = "Gil Georges", email = "gil.georges@mob.etat.lu" }
+    ]
+    requires-python = ">=3.7"
+    readme = "README.md"
+    license = {text = "MIT"}
+    classifiers = [
+        "Programming Language :: Python :: 3",
+    ]
+    dependencies = [
+        "dagster >=0.15.3",
+        "psycopg2",
+        "mapmatcher"
+    ]
+    dynamic = ["version"]
 
 [build-system]
-requires = ["setuptools>=56", "wheel", "setuptools_scm[toml]>=3.4.1"]
-build-backend = "setuptools.build_meta"
+    requires = ["setuptools>=56", "wheel", "setuptools_scm[toml]>=3.4.1"]
+    build-backend = "setuptools.build_meta"
 
 [project.optional-dependencies]
 dev = [
