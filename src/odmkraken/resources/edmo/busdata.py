@@ -3,7 +3,6 @@ import dagster
 from . import EDMOData
 import pendulum
 import uuid
-import pandas as pd
 from datetime import datetime
 from dataclasses import dataclass
 import uuid
