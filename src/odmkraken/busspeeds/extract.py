@@ -8,6 +8,7 @@ import math
 import uuid
 from datetime import datetime
 import dagster
+from dataclasses import dataclass
 
 TBL = typing.List[typing.Tuple[int, datetime, datetime]]
 CSV_REQUIRED_FIELDS = {"TYP", "DATUM", "SOLLZEIT", "ZEIT", "FAHRZEUG", "LINIE", "UMLAUF", "FAHRT", "HALT", "LATITUDE", "LONGITUDE", "EINSTEIGER", "AUSSTEIGER"}
@@ -22,8 +23,17 @@ class FileAlreadyImportedError(Exception):
         super().__init__(msg)
 
 
+@dataclass
+class NewData:
+    file: pathlib.Path
+    checksum: bytes
+    sep: str
+    date: str
+    lines: typing.Optional[int] = None
+
+
 @dagster.op(required_resource_keys={'edmo_bus_data'}, config_schema={'file': str})
-def raw_icts_data(context: dagster.OpExecutionContext):
+def extract_from_csv(context: dagster.OpExecutionContext) -> NewData:
     """Import vehicle data from a zipped CSV data-file.
 
     The task copies over all of the raw data onto a temporary
@@ -41,21 +51,40 @@ def raw_icts_data(context: dagster.OpExecutionContext):
     else:
         context.log.debug(f'file size: {human_readable_bytes(n_bytes)}')
     format = infer_format(handle)
-    context.log.debug(f'inferred format spec: {format}')
+    msg = ', '.join(f'{k}=`{v}`' for k, v in format.items())
+    context.log.debug(f'inferred format spec: {msg}')
     checksum = compute_checksum(handle)
     context.log.debug(f'checksum: {checksum}')
-    
+    nd = NewData(file, checksum, **format)
+
     # ensure we are importing a thusfar unknown file
-    if context.resources.edmo_bus_data.check_file_already_imported(checksum):
+    if context.resources.edmo_bus_data.check_file_already_imported(nd.checksum):
         raise FileAlreadyImportedError(file, checksum)
 
     # dump contents of file into a newly created table
-    context.resources.edmo_bus_data.import_csv_file(handle, file, checksum, **format)
+    context.log.info('loading raw data into staging table ...')
+    nd.lines = context.resources.edmo_bus_data.import_csv_file(handle, sep=nd.sep)
+    context.log.info(f'ingested {nd.lines} lines')
+
+    return nd
+
+
+@dagster.op(required_resource_keys={'edmo_bus_data'})
+def adjust_dates(context: dagster.OpExecutionContext, nd: NewData) -> NewData:
+    context.log.info('adjusting staging table\'s date columns ...')
+    context.resources.edmo_bus_data.adjust_date(nd.date)
+    return nd
+
+
+@dagster.op(required_resource_keys={'edmo_bus_data'})
+def load_data(context: dagster.OpExecutionContext, nd: NewData):
+    context.log.info('loading data into analytical tables ...')
+    context.resources.edmo_bus_data.transform_data(nd.file, nd.checksum)
 
 
 @dagster.graph()
 def icts_data():
-    raw_icts_data()
+    load_data(adjust_dates(extract_from_csv()))
 
 
 class UnusableZipFile(Exception):
@@ -116,7 +145,7 @@ def infer_format(handle: typing.IO):
     # we should take this to the next level and invest in a pandas-based
     # workflow leveraging panderas or great expectations.
     seps = '|'.join(CSV_KNOWN_SEPARATORS)
-    lines = [handle.readline().decode('utf-8') for i in range(3)]
+    lines = [handle.readline().decode('utf-8').strip() for i in range(3)]
     
     match = re.match(f'[a-zA-Z0-9_]+["\']? *({seps})', lines[0])
     if not match:

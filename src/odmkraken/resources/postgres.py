@@ -32,8 +32,9 @@ class PostgresConnector:
         cur = self.connection.cursor(name=name)
         try:
             yield cur
-        except psycopg2.Error as e:
+        except psycopg2.Error:
             self.connection.rollback()
+            raise
         finally:
             cur.close()
 
@@ -80,8 +81,9 @@ class PostgresConnector:
             tbl_id = table
         
         with self.cursor() as cur:
-            sep_lit = sql.Literal(cur.mogrify(separator))
+            sep_lit = sql.Literal(separator)
             query = sql.SQL('COPY {} FROM STDIN WITH (FORMAT csv, DELIMITER {}, HEADER 1)').format(tbl_id, sep_lit)
+            print(query.as_string(cur))
             cur.copy_expert(query, handle)
 
     def execute_batch(self, query: str, data: typing.List[typing.Tuple[typing.Any, ...]], cursor=None):
