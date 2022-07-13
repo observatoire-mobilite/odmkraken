@@ -10,11 +10,14 @@ from datetime import datetime
 import dagster
 
 TBL = typing.List[typing.Tuple[int, datetime, datetime]]
-
+CSV_REQUIRED_FIELDS = {"TYP", "DATUM", "SOLLZEIT", "ZEIT", "FAHRZEUG", "LINIE", "UMLAUF", "FAHRT", "HALT", "LATITUDE", "LONGITUDE", "EINSTEIGER", "AUSSTEIGER"}
+CSV_KNOWN_SEPARATORS = [',', ';', '\t']
 
 class FileAlreadyImportedError(Exception):
 
     def __init__(self, file: pathlib.Path, checksum: typing.Optional[bytes]=None):
+        self.file = file
+        self.checksum = checksum
         msg = f'File with identical checksum as `{file}` was already successfully imported'
         super().__init__(msg)
 
@@ -29,7 +32,7 @@ def raw_icts_data(context: dagster.OpExecutionContext):
     Note that if any exception occurs at any stage, the entire process
     is rolled back, ensuring the integrity of the existing data.
     Also note that one of the actions triggering such a rollback is
-    re-importing already imported data.
+    re-importing already imported data. 
     """
     file = pathlib.Path(context.op_config['file'])
     n_bytes, handle = open_file(file)
@@ -55,14 +58,22 @@ def icts_data():
     raw_icts_data()
 
 
+class UnusableZipFile(Exception):
+
+    def __init__(self, file: pathlib.Path, n_files: int):
+        self.file = file
+        self.n_files = int(n_files)
+        super().__init__(f'zip-file `{self.file} contains {n_files} files, but expected was exactly one')
+
+
 def open_file(file: pathlib.Path) -> typing.Tuple[int, typing.IO]:
     if not zipfile.is_zipfile(file):
         return 0, file.open('rb')
 
     archive = zipfile.ZipFile(file)
-    n_bytes = archive.filelist[0].file_size
     if len(archive.filelist) != 1:
-        raise ValueError('zip archive must contain exactly one file')
+        raise UnusableZipFile(file, n_files=len(archive.filelist))
+    n_bytes = archive.filelist[0].file_size
     return n_bytes, archive.open(archive.filelist[0], 'r')
 
 def human_readable_bytes(n_bytes: int) -> str:
@@ -70,44 +81,73 @@ def human_readable_bytes(n_bytes: int) -> str:
         return '0 bytes'
     k = math.floor(math.log10(n_bytes) / 3)
     suffix = ['bytes', 'kB', 'MB', 'GB', 'TB'][k]
+    if suffix == 'bytes':
+        return f'{n_bytes} bytes'
     return f'{n_bytes * 10**(-k*3):.2f} {suffix}'
 
 
-class WrongFileFormat(Exception):
+class CSVFormatProblem(Exception):
     pass
 
 
-def infer_format(handle: typing.IO):
-    lines = [handle.readline().decode('utf-8') for i in range(3)]
-    for field in ("TYP", "DATUM", "SOLLZEIT", "ZEIT", "FAHRZEUG",
-                  "LINIE", "UMLAUF", "FAHRT", "HALT", "LATITUDE",
-                  "LONGITUDE", "EINSTEIGER", "AUSSTEIGER"):
-        if field not in lines[0]:
-            raise WrongFileFormat(f'input file header lacks `{field}` field')
+class HeaderLacksField(CSVFormatProblem):
+
+    def __init__(self, fields: typing.Sequence[str]):
+        self.fields = list(fields)
+        msg = ', '.join(fields)
+        super().__init__(f'input file header lacks the following field(s): {msg}')
+
+
+class UnkownCSVDialect(CSVFormatProblem):
     
-    match = re.match(f'TYP["\']?(;|,)', lines[0])
+    def __init__(self):
+        super().__init__('file is not in CSV format, or uses an unkown dialect. It might either use a separator other than "," and ";", or it quotes and/or whitespace rules wrong.')
+    
+
+class UnsupportedDateFormat(CSVFormatProblem):
+
+    def __init__(self, date: str):
+        self.date = date
+        super().__init__(f'Unable to infer date format from "{date}". See documentation of `odmkraken.extract.infer_format`.')
+
+
+def infer_format(handle: typing.IO):
+    # TODO: this is not very robust. But instead of developing it further
+    # we should take this to the next level and invest in a pandas-based
+    # workflow leveraging panderas or great expectations.
+    seps = '|'.join(CSV_KNOWN_SEPARATORS)
+    lines = [handle.readline().decode('utf-8') for i in range(3)]
+    
+    match = re.match(f'[a-zA-Z0-9_]+["\']? *({seps})', lines[0])
     if not match:
-        raise WrongFileFormat('does not seem to be CSV format')
+        raise UnkownCSVDialect()
     format = {'sep': match.group(1)}
     
-    header = [s.strip('"\' ') for s in lines[0].split(format['sep'])]
+    header = re.split(f'\W+', lines[0])
+    header = [f.strip('"\',;') for f in header]
+    missing = CSV_REQUIRED_FIELDS.difference(header)
+    if missing:
+        raise HeaderLacksField(iter(missing))
+
     i_datum = header.index('DATUM')
     datum = lines[1].split(format['sep'])[i_datum]
     
-    if re.match(r'\d{2}\.\d{2}\.\d{4}', datum):
+    if re.match(r'\d{2}\.\d{2}\.\d{4}$', datum):
         format['date'] = 'DD.MM.YYYY'
-    elif re.match(r'\d{2}-[A-Z]{3}-\d{2}', datum):
+    elif re.match(r'\d{2}-[A-Z]{3}-\d{2}$', datum):
         format['date'] = 'DD-MON-YY'
-    elif re.match(r'\d{2}-[A-Z][a-z]{2}-\d{2}', datum):
+    elif re.match(r'\d{2}-[A-Z][a-z]{2}-\d{2}$', datum):
         format['date'] = 'DD-Mon-YY'
-    elif re.match(r'\d{2}-[A-Z]{3}-\d{4}', datum):
+    elif re.match(r'\d{2}-[A-Z]{3}-\d{4}$', datum):
         format['date'] = 'DD-MON-YYYY'
-    elif re.match(r'\d{2}-[A-Z][a-z]{2}-\d{4}', datum):
+    elif re.match(r'\d{2}-[A-Z][a-z]{2}-\d{4}$', datum):
         format['date'] = 'DD-Mon-YYYY'
-    elif re.match(r'\d{4}-\d{1,2}-\d{1,2}', datum):
+    elif re.match(r'\d{4}-\d{1,2}-\d{1,2}$', datum):
         format['date'] = 'YYYY-MM-DD'
     else:
-        raise WrongFileFormat('unknown date format')
+        raise UnsupportedDateFormat(datum)
+
+    # TODO: check dates also apply on other date columns
 
     return format
 

@@ -70,16 +70,15 @@ class EDMOBusData(EDMOData):
             return cur.rowcount > 0
 
     def import_csv_file(self, handle, file, checksum, sep: str=',', date: str='YYYY-MM-DD'):
-        self.store.run('call bus_data.create_staging_table();')
+        self.store.run('call bus_data.create_staging_table()')
         self.store.copy_from(handle, ('bus_data', 'raw_data'), separator=sep)
-        self.store.run('call bus_data.adjust_format(%s);', date)
+        self.store.run('call bus_data.adjust_format(%s)', date)
 
         with self.store.cursor() as cur:
             cur.execute('call bus_data.extract_vehicles()')
-            cur.execute('call bus_data.extract_vehicles()')
             cur.execute('call bus_data.extract_lines()')
             cur.execute('call bus_data.extract_stops()')
-            cur.execute('call bus_data.extract_runs_with_timeframes()')
+            cur.execute('select * from bus_data.extract_runs_with_timeframes();')
             timeframes = cur.fetchall()
             cur.execute('call bus_data.extract_pings()')
             

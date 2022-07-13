@@ -1,3 +1,4 @@
+import typing
 import pytest
 from odmkraken.resources.postgres import *
 import dagster
@@ -15,7 +16,11 @@ def fake_psyco(mocker):
     fake_cur = mocker.Mock()
     fake_cur.execute = mocker.Mock()
     fake_cur.callproc = mocker.Mock()
+    fake_cur.fetchone = mocker.Mock(return_value=('hallo', 2))
+    fake_cur.fetchall = mocker.Mock(return_value=[('hallo', 2), ('moin', 3)])
+    fake_cur.mogrify = mocker.Mock(side_effect=lambda r: f"'{r}'")
     fake_cur.close = mocker.Mock()
+    fake_cur.copy_expert = mocker.Mock()
     fake_conn = mocker.Mock()
     fake_conn.cursor = mocker.Mock(return_value=fake_cur)
     fake_conn.rollback = mocker.Mock()
@@ -68,7 +73,7 @@ def test_postgresconnector_query(fake_psyco):
     cur.close.assert_called()    
 
 
-def test_postgresconnector_callproc(fake_psyco):
+def test_postgresconnector_callproc(fake_psyco) -> typing.NoReturn:
     """Query must work properly on cursor."""
     c = PostgresConnector(dsn='test')
     with c.callproc('proc', 'moin', 22, name='test') as cur:
@@ -81,7 +86,77 @@ def test_postgresconnector_callproc(fake_psyco):
     fake_psyco._conn.rollback.assert_called_once()
     cur.close.assert_called()    
 
-        
+
+def test_postgresconnector_run(fake_psyco) -> typing.NoReturn:
+    c: PostgresConnector = PostgresConnector(dsn='test')
+    c.run('some sql', 'arg1', 22, name='test')
+    fake_psyco._conn.cursor.assert_called_once_with(name='test')
+    fake_psyco._cur.execute.assert_called_once_with('some sql', ('arg1', 22))
+
+
+def test_postgresconnector_fetchone(fake_psyco) -> typing.NoReturn:
+    c = PostgresConnector(dsn='test')
+    res = c.fetchone('some sql', 'arg1', 23)
+    fake_psyco._conn.cursor.assert_called_once()
+    fake_psyco._cur.execute.assert_called_once_with('some sql', ('arg1', 23))
+    assert res == ('hallo', 2)
+
+
+def test_postgresconnector_fetchall(fake_psyco) -> typing.NoReturn:
+    c = PostgresConnector(dsn='test')
+    res = c.fetchall('some sql', 'arg1', 23)
+    fake_psyco._conn.cursor.assert_called_once()
+    fake_psyco._cur.execute.assert_called_once_with('some sql', ('arg1', 23))
+    assert res == [('hallo', 2), ('moin', 3)]
+
+
+def test_postgresconnector_close(fake_psyco):
+    c = PostgresConnector(dsn='test')
+    
+    # we aren't connected yet, so nothing must happen
+    c.close()
+    fake_psyco._conn.close.assert_not_called()
+
+    # force connection and try again
+    c.connection
+    c.close()
+    fake_psyco._conn.close.assert_called_once()
+    
+    # since we're closed, call-count must remain at 1
+    c.close()
+    fake_psyco._conn.close.assert_called_once()
+
+
+def test_postgresconnector_copy_from(fake_psyco, mocker):
+    c = PostgresConnector(dsn='test')
+    fake_handle = mocker.Mock()
+    tpl = sql.SQL('COPY {} FROM STDIN WITH (FORMAT csv, DELIMITER {}, HEADER 1)')
+    
+    # call with simple table name
+    variants = (
+        ('test', sql.Identifier('test'), '?'),
+        (('schema', 'test'), sql.Identifier('schema', 'test'), '!'),
+        (sql.Identifier('testing'), sql.Identifier('testing'), '+')
+    )
+    for target, q, sep in variants:
+        c.copy_from(fake_handle, target, separator=sep)
+        q = tpl.format(q, sql.Literal(f"'{sep}'"))
+        fake_psyco._cur.copy_expert.assert_called_with(q, fake_handle)
+        fake_psyco._cur.mogrify.assert_called_with(sep)
+
+
+def test_postgresconnector_execute_batch(fake_psyco, mocker):
+    c = PostgresConnector(dsn='test')
+    fake_eb = mocker.patch('odmkraken.resources.postgres.execute_batch', autospec=True)
+    fake_data = [('a', 2, 3), ('b', 5, 6)]
+    c.execute_batch('some query', fake_data)
+    fake_eb.assert_called_once_with(fake_psyco._cur, 'some query', fake_data)
+
+    other_cur = mocker.Mock()
+    c.execute_batch('some query', fake_data, cursor=other_cur)
+    fake_eb.assert_called_with(other_cur, 'some query', fake_data)
+
+
 def test_resource_handler(fake_psyco):
     ctx = dagster.build_init_resource_context(config={'dsn': 'test'})
     with postgres_connection(ctx) as pgc:

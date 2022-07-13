@@ -44,7 +44,7 @@ def extract_halts(context: dagster.OpExecutionContext, vehicle_timeframe: Vehicl
 @dagster.daily_partitioned_config(start_date=datetime(2020, 1, 1), hour_offset=4)
 def mapmatch_config(start: datetime, end: datetime):
     config = dict(date_from=str(start), date_to=str(end))
-    return {'ops': {'load_vehicle_timeframes': {'config': { config }}}}
+    return {'ops': {'load_vehicle_timeframes': {'config': config }}}
 
 
 @dagster.graph()

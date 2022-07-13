@@ -99,3 +99,10 @@ def test_extract_halts(fake_edmo, fake_tf):
     fake_edmo.extract_halts.assert_called_once_with(fake_tf)
 
 
+def test_mapmatch_config(mocker):
+    t0 = datetime(2022, 4, 12, 4)
+    t1 = datetime(2022, 4, 13, 4)
+    res = mapmatch_config(t0, t1)
+    conf = res['ops']['load_vehicle_timeframes']['config']
+    assert conf['date_from'] == str(t0)
+    assert conf['date_to'] == str(t1)

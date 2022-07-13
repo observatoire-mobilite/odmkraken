@@ -16,8 +16,10 @@ def fake_pgc(mocker):
         (uuid.uuid4(), 2, datetime(2020, 1, 1, 4), datetime(2020, 1, 2, 4)),
         (uuid.uuid4(), 0, datetime(2020, 1, 2, 4), datetime(2020, 1, 3, 4))
     ]
-    fake_cur.__enter__ = mocker.Mock(return_value=fake_data)
+    fake_cur.__enter__ = mocker.Mock(return_value=fake_cur)
+    fake_cur.__iter__.return_value = fake_data
     fake_cur.rowcount = len(fake_data)
+    fake_pgc.cursor = mocker.Mock(return_value=fake_cur)
     fake_pgc.query = mocker.Mock(return_value=fake_cur)
     fake_pgc.callproc = mocker.Mock(return_value=fake_cur)
     fake_pgc._fake_data = fake_data
@@ -35,6 +37,20 @@ def test_edmo_bus_data(fake_pgc):
 def test_edmobusdata(fake_pgc):
     data = EDMOBusData(fake_pgc)
     assert data.store == fake_pgc
+
+
+def test_shortest_path_engine(mocker):
+    fake_edmo = mocker.patch('odmkraken.resources.edmo.busdata.EDMOBusData', autospec=True)
+    fake_cur = mocker.MagicMock(spec=['__enter__', '__exit__'])
+    fake_cur.__enter__.return_value = fake_cur
+    fake_edmo.get_edgelist.return_value = fake_cur
+    fake_spe = mocker.patch('odmkraken.resources.edmo.busdata.NXPathFinderWithLocalCache', autospec=True)
+    ctx = dagster.build_init_resource_context(
+        resources={'edmo_bus_data': fake_edmo}
+    )
+    spe = shortest_path_engine(ctx)
+    fake_edmo.get_edgelist.assert_called_once()
+    assert spe == fake_spe(fake_cur)
 
 
 def test_edmobusdata_get_timeframes_by_file(fake_pgc):
@@ -81,3 +97,35 @@ def test_edmobusdata_extract_halts(fake_pgc):
     data = EDMOBusData(fake_pgc)
     list(data.extract_halts(tf))
     fake_pgc.query.assert_called_once_with(SQL_HALTS, tf.vehicle_id, t1, t2)
+
+
+def test_edmobusdata_get_nearby_roads(fake_pgc):
+    t = datetime.now()
+    x, y = 100.4, 100.5
+    data = EDMOBusData(fake_pgc)
+    pings = list(data.get_nearby_roads(t, x, y))
+    assert len(pings) == 4
+    fake_pgc.callproc.assert_called_once_with('road_network.nearby_roads', x, y)
+
+
+def test_check_file_already_imported(fake_pgc):
+    checksum = b'moin'
+    data = EDMOBusData(fake_pgc)
+    assert data.check_file_already_imported(checksum)
+    query = 'select * from bus_data.data_files where checksum=%s'
+    fake_pgc.query.assert_called_once_with(query, checksum)
+
+
+def test_import_csv_file(fake_pgc, mocker):
+    # TODO: incomplete, but for now just useful to check the method is executable
+    fake_handle = mocker.Mock()
+    file = 'testfile.csv'
+    checksum = b'checkthesum'
+    
+    data = EDMOBusData(fake_pgc)
+    data.import_csv_file(fake_handle, file, checksum, sep='?', date='moin')
+
+    fake_pgc.run.assert_called_with('call bus_data.adjust_format(%s)', 'moin')
+    fake_pgc.copy_from.assert_called_with(fake_handle, ('bus_data', 'raw_data'), separator='?')
+
+

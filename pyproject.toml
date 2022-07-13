@@ -28,6 +28,6 @@ skip-string-normalization = true
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q"
+addopts = "-ra -q --cov-report xml:cov.xml --cov odmkraken"
 pythonpath = ["src"]
 testpaths = ["tests"]

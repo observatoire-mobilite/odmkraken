@@ -51,24 +51,25 @@ class PostgresConnector:
             cur.callproc(proc, args)
             yield cur
 
-    def run(self, sql: str, *args, **kwargs):
+    def run(self, sql: str, *args, **kwargs) -> None:
         with self.cursor(**kwargs) as cur:
             cur.execute(sql, args)
 
-    def fetchone(self, *args, **kwargs):
-        with self.execute(*args, **kwargs) as cur:
+    def fetchone(self, *args, **kwargs) -> typing.Tuple[typing.Any, ...]:
+        with self.query(*args, **kwargs) as cur:
             return cur.fetchone()
 
-    def fetchall(self, *args, **kwargs):
-        with self.execute(*args, **kwargs) as cur:
+    def fetchall(self, *args, **kwargs) -> typing.List[typing.Tuple[typing.Any, ...]]:
+        with self.query(*args, **kwargs) as cur:
             return cur.fetchall()
 
-    def close(self):
+    def close(self) -> None:
         if self._conn is None:
             warnings.warn('trying to close database connection, but was never connected')
             return
-        self._conn.close() 
-
+        self._conn.close()
+        self._conn = None
+       
 
     def copy_from(self, handle: TextIOBase, table: typing.Union[str, sql.Identifier, typing.Tuple[str, str]], separator: str=','):
         if isinstance(table, tuple):
@@ -84,9 +85,8 @@ class PostgresConnector:
             cur.copy_expert(query, handle)
 
     def execute_batch(self, query: str, data: typing.List[typing.Tuple[typing.Any, ...]], cursor=None):
-        cursor = self.cursor() if cursor is None else cursor
+        cursor = self.connection.cursor() if cursor is None else cursor
         execute_batch(cursor, query, data)
-
 
 
 @dagster.resource
