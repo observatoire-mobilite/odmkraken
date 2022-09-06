@@ -47,16 +47,19 @@ def genpw(length: int=16):
 @click.pass_obj
 @click.argument('role')
 @click.option('--length', type=click.IntRange(8, 100), help='Number of characters to generate')
-def resetpw(db: DB, role: str, length: int=16):
+@click.option('--dsn', is_flag=True, default=False, help='return postgres://<user>:<password>@<host>:<port>, instead of just <password>')
+def resetpw(db: DB, role: str, length: int=16, dsn: bool=False):
     """Change user passwords."""
     password = secrets.token_urlsafe(length)
     db.execute(sql.SQL('alter user {user} with password {password}')
                .format(user=sql.Identifier(role), 
                        password=sql.Literal(password)))
-    #dsn = '@'.join((':'.join((role, password)), ':'.join(str(s) for s in db.address)))
-    #print(dsn)
+    if dsn:
+        dsn = '@'.join((':'.join((role, password)), ':'.join(str(s) for s in db.address)))
+        print(f'postgres://{dsn}')
+        return
     print(password)
-
+    
 
 @db.command
 @click.pass_context
