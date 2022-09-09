@@ -39,3 +39,6 @@ minversion = "7.0"
 addopts = "-ra -q --cov-report xml:cov.xml --cov odmkraken"
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
