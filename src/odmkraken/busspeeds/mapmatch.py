@@ -5,7 +5,7 @@ from mapmatcher import Itinerary, reconstruct_optimal_path, ProjectLinear, Score
 from odmkraken.resources.edmo.busdata import VehicleTimeFrame
 
 
-@dagster.op(out=dagster.DynamicOut(), required_resource_keys={'edmo_bus_data'},
+@dagster.op(out=dagster.DynamicOut(), required_resource_keys={'edmo_vehdata'},
             config_schema={'date_from': str, 'date_to': str})
 def load_vehicle_timeframes(context: dagster.OpExecutionContext) -> typing.Iterator[dagster.DynamicOutput[VehicleTimeFrame]]:
     dates = context.op_config['date_from'], context.op_config['date_to']
@@ -13,7 +13,7 @@ def load_vehicle_timeframes(context: dagster.OpExecutionContext) -> typing.Itera
         yield dagster.DynamicOutput(tf, mapping_key=str(tf.id.hex))
 
 
-@dagster.op(required_resource_keys={'edmo_bus_data', 'shortest_path_engine'})
+@dagster.op(required_resource_keys={'edmo_vehdata', 'shortest_path_engine'})
 def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> typing.List[typing.Tuple[int, int, int, float, float]]:
 
     # lazy nearby road detection
@@ -36,7 +36,7 @@ def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: Veh
     return [(vehicle_timeframe.vehicle_id, *p) for p in pathway]
 
 
-@dagster.op(required_resource_keys={'edmo_bus_data'})
+@dagster.op(required_resource_keys={'edmo_vehdata'})
 def extract_halts(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame):
     context.resources.edmo_bus_data.extract_halts(vehicle_timeframe)
 

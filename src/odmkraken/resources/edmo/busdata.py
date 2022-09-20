@@ -31,7 +31,7 @@ class VehicleTimeFrame:
         return (self.vehicle_id, self.time_from, self.time_to)
 
 
-class EDMOBusData(EDMOData):
+class EDMOVehData(EDMOData):
     
     def get_timeframes_by_file(self, file_id: uuid.UUID) -> typing.Iterator[VehicleTimeFrame]:
         """Return all vehicle timeframes contained in a given file."""
@@ -107,10 +107,9 @@ class EDMOBusData(EDMOData):
             cur.execute(f'drop table if exists "vehdata"."raw_data";')     
         
 
-
 @dagster.resource(required_resource_keys={'postgres_connection'})
-def edmo_vehdata(init_context: dagster.InitResourceContext) -> EDMOBusData:
-    return EDMOBusData(init_context.resources.postgres_connection)
+def edmo_vehdata(init_context: dagster.InitResourceContext) -> EDMOVehData:
+    return EDMOVehData(init_context.resources.postgres_connection)
 
 
 @dagster.resource(required_resource_keys={'edmo_vehdata'})

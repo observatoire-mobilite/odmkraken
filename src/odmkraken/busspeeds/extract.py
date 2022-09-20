@@ -32,7 +32,7 @@ class NewData:
     lines: typing.Optional[int] = None
 
 
-@dagster.op(required_resource_keys={'edmo_bus_data'}, config_schema={'file': str})
+@dagster.op(required_resource_keys={'edmo_vehdata'}, config_schema={'file': str})
 def extract_from_csv(context: dagster.OpExecutionContext) -> NewData:
     """Import vehicle data from a zipped CSV data-file.
 
@@ -69,14 +69,14 @@ def extract_from_csv(context: dagster.OpExecutionContext) -> NewData:
     return nd
 
 
-@dagster.op(required_resource_keys={'edmo_bus_data'})
+@dagster.op(required_resource_keys={'edmo_vehdata'})
 def adjust_dates(context: dagster.OpExecutionContext, nd: NewData) -> NewData:
     context.log.info('adjusting staging table\'s date columns ...')
     context.resources.edmo_bus_data.adjust_date(nd.date)
     return nd
 
 
-@dagster.op(required_resource_keys={'edmo_bus_data'})
+@dagster.op(required_resource_keys={'edmo_vehdata'})
 def load_data(context: dagster.OpExecutionContext, nd: NewData):
     context.log.info('loading data into analytical tables ...')
     context.resources.edmo_bus_data.transform_data(nd.file, nd.checksum)
