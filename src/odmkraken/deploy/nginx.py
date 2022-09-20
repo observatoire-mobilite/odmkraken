@@ -144,11 +144,13 @@ map $http_forwarded $proxy_add_forwarded {
         {{ caller() | indent(4) }}
     }
 {% endmacro %}
-{% macro location_static(url, root_path, try_files='') -%}
+{% macro location_static(url, root_path, try_files=None) -%}
 {% call location(url) %}
     root        "{{root_path}}";
     index       index.html;
+    {%- if try_files %}
     try_files   {{ try_files | default('$uri $uri', true) }};
+    {% endif -%}
 {% endcall %}
 {%- endmacro %}
 {% macro location_proxy(url, backend_url='http://localhost', timeout=60) -%}
@@ -190,7 +192,7 @@ map $http_forwarded $proxy_add_forwarded {
     proxy_set_body                  off;
     proxy_http_version              1.1;
     proxy_pass                      {{ backend_url}};
-{% endcall %}
+{%- endcall %}
 {% endmacro -%}
 worker_processes  {{ worker_processes | default(2, true) }};
 error_log "{{ log_dir | default('logs', true) }}/nginx.error.log";
@@ -205,7 +207,7 @@ http {
     default_type  application/octet-stream;
     {{ http_params() | indent(4) }}
 
-    {%- for folder in ('proxy', 'client_body', 'fastcgi', 'scgi', 'uwsgi') -%}
+    {%- for folder in ('proxy', 'client_body', 'fastcgi', 'scgi', 'uwsgi') %}
     {{ folder }}_temp_path "{{ temp_dir | default('temp', true) }}/{{ folder }}_temp";
     {% endfor -%}
 
@@ -243,11 +245,6 @@ http {
             deny all;
         }
 
-        error_page   500 502 503 504  /50x.html;
-        location = /50x.html {
-            root   html;
-        }
-
         {% for loc in locations -%}
         {%- set typ = loc.pop('@type') -%}
         {%- if typ == 'static' -%}
@@ -263,33 +260,33 @@ http {
 """
 
 
-
-
 @click.command
-@click.option('--prefix', '-p', type=click.Path(path_type=Path), default=Path('.').absolute(), help='Main odmkraken data directory')
+@click.option('--rootdir', '-r', type=click.Path(path_type=Path), default=Path('./www').absolute(), help='Root directory from which to serve stationary files')
+@click.option('--logdir', '-l', type=click.Path(path_type=Path), default=Path('./logs').absolute(), help='Path to directory where to keep logfiles')
 @click.option('--out', '-o', type=click.File('w'), default=sys.stdout, help='Path to nginx.conf')
-def main(prefix: Path, out):
+@click.option('--proxy', '-p', type=click.Tuple([str, str]), multiple=True, help='Locations where to reverse proxy a given backend url (e.g.: --proxy /api http://localhost:4321)')
+@click.option('--upload', '-u', type=click.Tuple([str, str]), multiple=True, help='Locations where to to allow uploads to and backend to call on completion (e.g.: --upload /upload http://localhost:4321/upload)')
+@click.option('--static', '-s', type=click.Tuple([str, str]), multiple=True, help='Locations to serve static content from and its location in the filesystem (e.g.: --static / /srv/www)')
+def main(out: typing.IO[str], rootdir: Path, logdir: Path, 
+         proxy: typing.List[typing.Tuple[str, str]],
+         upload: typing.List[typing.Tuple[str, str]],
+         static: typing.List[typing.Tuple[str, str]]):
     env = jinja2.Environment()
     tpl = env.from_string(_tpl())
-    prefix = Path(prefix)
 
     param = {
-        'log_dir': str(prefix / 'logs').replace(os.sep, '/'),
+        'log_dir': str(logdir).replace(os.sep, '/'),
         'temp_dir': tempfile.gettempdir().replace(os.sep, '/'),
-        'locations': [
-            {'@type': 'static',
-            'url': '/',
-            'root_path': str(prefix / 'www').replace(os.sep, '/')
-            },
-            {'@type': 'proxy',
-            'url': '/etl',
-            'backend_url': 'http://localhost:3000'
-            }
-        ]
+        'locations': []
     }
 
+    def loc(kind: str, url: str, **kwargs) -> typing.Dict[str, str]:
+        return { '@type': kind, 'url': url, **kwargs }
 
-    prefix = Path().absolute() if prefix is None else Path(prefix)
+    param['locations'] += [loc('proxy', location, backend_url=endpoint) for location, endpoint in proxy]
+    param['locations'] += [loc('upload', location, backend_url=endpoint) for location, endpoint in upload]
+    param['locations'] += [loc('static', location, root_path=endpoint) for location, endpoint in static]
+
     with out:
         out.write(tpl.render(**param))
 

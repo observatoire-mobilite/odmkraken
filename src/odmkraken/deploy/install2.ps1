@@ -54,6 +54,14 @@ function Install {
 
     # variable to collect uninstall instructions
     $Uninstall = @()
+
+    # produce configuration files
+    python nginx.py --out "${ETC}\nginx\nginx.conf" `
+        --logdir "${LOGS}" `
+        --rootdir "${Env:NGINX_HOME}" `
+        --proxy /etl http://localhost:3000 `
+        --static / $Env:NGINX_HOME
+    $Uninstall += "Remove-Item ${ETC}\nginx\nginx.conf"
     
     # create the database folder
     Write-Output "Initializing Postgres ..."
@@ -141,7 +149,7 @@ function Install {
     Create-NSSMService -Name $SRV_NGINX `
         -Description "Reverse proxy shielding web applications." `
         -Executable "${Env:CONDA_PREFIX}\Library\bin\nginx.exe" `
-        -Parameters "-c ${ETC}\nginx\nginx.conf -e ${LOGS}\nginx.errors.log" `
+        -Parameters "-c ${ETC}\nginx\nginx.conf -e ${LOGS}\nginx.error.log" `
         -AppDirectory $Env:TEMP `
         -DependsOn $SRV_DAGIT
     Start-Service $SRV_NGINX
@@ -149,9 +157,8 @@ function Install {
     $Uninstall += "nssm remove `"${SRV_NGINX}`" confirm"
     $Uninstall += "remove-item -Recurse -Force ${Env:PGDATA}"
 
-
     # create uninstall script
-    $Uninstall | Out-File -FilePath "${Env:CONDA_PREFIX}\uninstall-odm-services.ps1"
+    $Uninstall | Out-File -FilePath "${Env:CONDA_PREFIX}\uninstall-odmkraken-services.ps1"
 
     Set-Clipboard -Value "$Env:PGPASS"
     Write-Output "Database superuser password has been copied to clipboard."
@@ -181,7 +188,7 @@ function Create-NSSMService {
 }
 
 function Remove {
-    $uninstall_services="${Env:CONDA_PREFIX}\uninstall-odm-services.ps1"
+    $uninstall_services="${Env:CONDA_PREFIX}\uninstall-odmkraken-services.ps1"
     . $uninstall_services
     remove-item $uninstall_services
 }
