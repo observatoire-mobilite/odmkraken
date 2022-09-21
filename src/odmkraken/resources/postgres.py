@@ -35,6 +35,8 @@ class PostgresConnector:
         except psycopg2.Error:
             self.connection.rollback()
             raise
+        else:
+            self.connection.commit()
         finally:
             cur.close()
 
