@@ -11,6 +11,7 @@ from . import DB
 import psycopg2.errors
 from psycopg2 import sql as sql
 import sys
+from datetime import datetime
 
 
 @click.group()
@@ -59,7 +60,7 @@ def resetpw(db: DB, role: str, length: int=16, dsn: bool=False):
         print(f'postgres://{dsn}')
         return
     print(password)
-    
+
 
 @db.command
 @click.pass_context
@@ -67,10 +68,12 @@ def resetpw(db: DB, role: str, length: int=16, dsn: bool=False):
 @click.option('--network-schema-name', default='network', show_default=True, help='Name of the schema storing network data.')
 @click.option('--vehdata-schema-name', default='vehdata', show_default=True, help='Name of the schema storing vehicle data.')
 @click.option('--srid', type=click.INT, default=2169, show_default=True, help='SRID used for all geographical data.')
+@click.option('--migrate', is_flag=True, help='Abort without complaining if database exists.')
 def setup(ctx: click.Context, dbname: str,
     network_schema_name: str,
     vehdata_schema_name: str,
-    srid: int=2169):
+    srid: int=2169, migrate: bool=False,
+    dbversion: str='0.1'):
     """Setup the `odmkraken` database.
 
     Arguments:
@@ -78,6 +81,9 @@ def setup(ctx: click.Context, dbname: str,
         network_schema_name: schema name where to store network topology data.
         vehdata_schema_name: name of the schema storing vehicle date.
         srid: identifier of the coordinate system used for all geographical data.
+        migrate: quit silently if the database already exists (but actually, in the
+            future, run migration scripts to adjust to new database layout). Useful
+            for automated deployment.
     """
     param = {
         'dbname': sql.Identifier(dbname),
@@ -92,21 +98,31 @@ def setup(ctx: click.Context, dbname: str,
     
     try:
         db.execute(sql.SQL('create database {}').format(param['dbname']))  # must run outside transaction
+        db.execute(sql.SQL('comment on database {} is {}').format(param['dbname'], sql.Literal(f'Entrepôt de données de mobilité, v{dbversion} (created on {datetime.now()})')))
     except psycopg2.errors.DuplicateDatabase:
+        if migrate:
+            click.echo('Database already set up')
+            ctx.exit(0)
         sys.stderr.writelines([
             'FAILURE: could not create the database !\n',
             f'PROBLEM: A database `{dbname}` already exists.\n'
-            'Hint: the `teardown` command deletes databases, irreversibly - use with caution.'
+            'Hint: the `teardown` command deletes databases; '
+            'alternatively, the `--migrate` flag turns this '
+            'error into a mere notice.\n'
         ])
         ctx.exit(1)
-    
+
+    # TODO: explicit database layout versioning
+    # query to retrieve comment
+    # cur.execute(sql.SQL('SELECT pg_catalog.shobj_description(d.oid, 'pg_database') FROM pg_catalog.pg_database d WHERE datname = '{}';
     try:
         db.run_script('db.setup.sql', dbname=dbname, param=param)
-    except psycopg2.Error:
-        print('Something went wrong. Invoking `teardown` command...')
+    except psycopg2.Error as e:
+        click.echo('Something went wrong. Invoking `teardown` command...')
         ctx.invoke(teardown, dbname=dbname)
-        raise
-    print('All done!')
+        sys.stderr.write(str(e))
+        ctx.exit(1)
+    click.echo('All done!')
 
 
 @db.command
