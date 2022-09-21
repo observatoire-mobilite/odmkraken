@@ -32,7 +32,7 @@ class NewData:
     lines: typing.Optional[int] = None
 
 
-@dagster.op(required_resource_keys={'edmo_bus_data'}, config_schema={'file': str})
+@dagster.op(required_resource_keys={'edmo_vehdata'}, config_schema={'file': str})
 def extract_from_csv(context: dagster.OpExecutionContext) -> NewData:
     """Import vehicle data from a zipped CSV data-file.
 
@@ -58,28 +58,28 @@ def extract_from_csv(context: dagster.OpExecutionContext) -> NewData:
     nd = NewData(file, checksum, **format)
 
     # ensure we are importing a thusfar unknown file
-    if context.resources.edmo_bus_data.check_file_already_imported(nd.checksum):
+    if context.resources.edmo_vehdata.check_file_already_imported(nd.checksum):
         raise FileAlreadyImportedError(file, checksum)
 
     # dump contents of file into a newly created table
     context.log.info('loading raw data into staging table ...')
-    nd.lines = context.resources.edmo_bus_data.import_csv_file(handle, sep=nd.sep)
+    nd.lines = context.resources.edmo_vehdata.import_csv_file(handle, sep=nd.sep)
     context.log.info(f'ingested {nd.lines} lines')
 
     return nd
 
 
-@dagster.op(required_resource_keys={'edmo_bus_data'})
+@dagster.op(required_resource_keys={'edmo_vehdata'})
 def adjust_dates(context: dagster.OpExecutionContext, nd: NewData) -> NewData:
     context.log.info('adjusting staging table\'s date columns ...')
-    context.resources.edmo_bus_data.adjust_date(nd.date)
+    context.resources.edmo_vehdata.adjust_date(nd.date)
     return nd
 
 
-@dagster.op(required_resource_keys={'edmo_bus_data'})
+@dagster.op(required_resource_keys={'edmo_vehdata'})
 def load_data(context: dagster.OpExecutionContext, nd: NewData):
     context.log.info('loading data into analytical tables ...')
-    context.resources.edmo_bus_data.transform_data(nd.file, nd.checksum)
+    context.resources.edmo_vehdata.transform_data(nd.file, nd.checksum)
 
 
 @dagster.graph()
