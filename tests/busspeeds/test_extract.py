@@ -13,8 +13,8 @@ def test_filealreadyimportederror():
     assert str(file) in str(err)
 
 
-def test_raw_icts_data(mocker):
-    fake_edmo = mocker.patch('odmkraken.resources.edmo.busdata.EDMOBusData', autospec=True)
+def test_extract_from_csv(mocker):
+    fake_edmo = mocker.patch('odmkraken.resources.edmo.busdata.EDMOVehData', autospec=True)
     fake_of = mocker.patch('odmkraken.busspeeds.extract.open_file')
     fake_handle = mocker.Mock()
     fake_of.return_value = 10000, fake_handle
@@ -23,27 +23,29 @@ def test_raw_icts_data(mocker):
     fake_if = mocker.patch('odmkraken.busspeeds.extract.infer_format')
     fake_if.return_value = {'sep': '?', 'date': 'DATE'}
     fake_file = '/some/where/a/file.csv.zip'
+    fake_uuid = mocker.patch('uuid.uuid4')
+    fake_uuid.return_value='abcdefgh'
     
     ctx = dagster.build_op_context(
-        resources={'edmo_bus_data': fake_edmo},
+        resources={'edmo_vehdata': fake_edmo},
         config={'file': '/some/where/a/file.csv.zip'}
     )
     
     fake_edmo.check_file_already_imported.return_value = False
-    raw_icts_data(ctx)
+    extract_from_csv(ctx)
 
     fake_of.assert_called_once_with(Path(fake_file))
     fake_if.assert_called_once_with(fake_handle)
     fake_cc.assert_called_once_with(fake_handle)
     fake_edmo.check_file_already_imported.assert_called_once_with(b'moin')
-    fake_edmo.import_csv_file.assert_called_once_with(fake_handle, Path(fake_file), b'moin', sep='?', date='DATE')
+    fake_edmo.import_csv_file.assert_called_once_with(fake_handle, sep='?', table='_import_abcdefgh')
 
     fake_of.return_value = 0, fake_handle
-    raw_icts_data(ctx)
+    extract_from_csv(ctx)
 
     fake_edmo.check_file_already_imported.return_value = True
     with pytest.raises(FileAlreadyImportedError):
-        raw_icts_data(ctx)
+        extract_from_csv(ctx)
 
 
 def test_unusablezipfile():
@@ -65,7 +67,6 @@ def test_open_file(mocker):
     fake_zippedfile.file_size = 100
     fake_zipfile.filelist = [fake_zippedfile]
     fake_zip.return_value = fake_zipfile
-
 
     # called on a non-zip file
     fake_iszip.return_value = False
@@ -158,6 +159,23 @@ def test_infer_format(mocker):
         format = infer_format(fake_handle)
         assert format['sep'] == ','
         assert format['date'] == fmt_str
+    
+
+def test_infer_format_on_completely_empty_file(mocker):
+    # mimmick a complete
+    fake_handle = mocker.Mock(spec=['readline'])
+    fake_handle.readline.side_effect = iter([b'', b'', b''])
+    with pytest.raises(FileIsEmpty):
+        infer_format(fake_handle)
+
+
+def test_infer_format_on_correct_but_empty_file(mocker):
+    # mimmick a correctly formed but otherwise empty file
+    fake_handle = mocker.Mock(spec=['readline'])
+    fake_header = (', '.join(list(CSV_REQUIRED_FIELDS))).encode('utf-8')
+    fake_handle.readline.side_effect = iter([fake_header, b'', b''])
+    with pytest.raises(FileHasNoData):
+        infer_format(fake_handle)
     
 
 def test_compute_checksum(mocker):
