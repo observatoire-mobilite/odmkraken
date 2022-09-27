@@ -34,7 +34,7 @@ def fake_edmo(mocker):
 
 def test_load_vehicle_timeframes(fake_edmo, mocker):
     t0, t1 = '2022-1-1 04:00', '2022-1-2 04:00'
-    ctx = dagster.build_op_context(resources={'edmo_bus_data': fake_edmo},
+    ctx = dagster.build_op_context(resources={'edmo_vehdata': fake_edmo},
                                    config={'date_from': t0, 'date_to': t1})
     dyn = list(load_vehicle_timeframes(ctx))
     fake_edmo.get_timeframes_on.assert_called_once_with(t0, t1)
@@ -67,7 +67,7 @@ def test_most_likely_path(fake_edmo, fake_tf, mocker):
     fake_proj_inst.project.return_value = [(1, 2, 0.0, 4.1), (2, 3, 4.1, 2.)]
 
     fake_spe = mocker.patch('mapmatcher.pathfinder.nx.NXPathFinderWithLocalCache', autospec=True)
-    res = {'edmo_bus_data': fake_edmo,
+    res = {'edmo_vehdata': fake_edmo,
            'shortest_path_engine': fake_spe}
     ctx = dagster.build_op_context(resources=res)
 
@@ -94,7 +94,7 @@ def test_most_likely_path(fake_edmo, fake_tf, mocker):
 
 
 def test_extract_halts(fake_edmo, fake_tf):
-    ctx = dagster.build_op_context(resources={'edmo_bus_data': fake_edmo})
+    ctx = dagster.build_op_context(resources={'edmo_vehdata': fake_edmo})
     extract_halts(ctx, fake_tf)
     fake_edmo.extract_halts.assert_called_once_with(fake_tf)
 

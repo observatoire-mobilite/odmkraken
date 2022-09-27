@@ -2,6 +2,7 @@ import typing
 import pytest
 from odmkraken.resources.postgres import *
 import dagster
+from contextlib import suppress
 
 
 def test_postgresconnector():
@@ -53,7 +54,7 @@ def test_postgresconnector_cursor(fake_psyco):
     cur.close.assert_called_once()
 
     # simulate problem
-    with c.cursor(name='test') as cur:
+    with suppress(RuntimeError), c.cursor(name='test') as cur:
         raise RuntimeError()
     fake_psyco._conn.rollback.assert_called_once()
     cur.close.assert_called()
@@ -67,7 +68,7 @@ def test_postgresconnector_query(fake_psyco):
         fake_psyco._cur.execute.assert_called_once_with('select 1', ('moin', 22))
     cur.close.assert_called_once()
         
-    with c.query('select 1', 'moin', 22, name='test') as cur:
+    with suppress(RuntimeError), c.query('select 1', 'moin', 22, name='test') as cur:
         raise RuntimeError()
     fake_psyco._conn.rollback.assert_called_once()
     cur.close.assert_called()    
@@ -81,7 +82,7 @@ def test_postgresconnector_callproc(fake_psyco) -> typing.NoReturn:
         fake_psyco._cur.callproc.assert_called_once_with('proc', ('moin', 22))
     cur.close.assert_called_once()
         
-    with c.callproc('proc', 'moin', 22, name='test') as cur:
+    with suppress(RuntimeError), c.callproc('proc', 'moin', 22, name='test') as cur:
         raise RuntimeError()
     fake_psyco._conn.rollback.assert_called_once()
     cur.close.assert_called()    
@@ -140,10 +141,9 @@ def test_postgresconnector_copy_from(fake_psyco, mocker):
     )
     for target, q, sep in variants:
         c.copy_from(fake_handle, target, separator=sep)
-        q = tpl.format(q, sql.Literal(f"'{sep}'"))
+        q = tpl.format(q, sql.Literal(sep))
         fake_psyco._cur.copy_expert.assert_called_with(q, fake_handle)
-        fake_psyco._cur.mogrify.assert_called_with(sep)
-
+        
 
 def test_postgresconnector_execute_batch(fake_psyco, mocker):
     c = PostgresConnector(dsn='test')

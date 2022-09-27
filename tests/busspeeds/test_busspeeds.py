@@ -4,7 +4,7 @@ from odmkraken.busspeeds.repo import *
 
 def test_resources():
     assert RESOURCES_TEST['postgres_connection']
-    assert RESOURCES_TEST['edmo_bus_data']
+    assert RESOURCES_TEST['edmo_vehdata']
     assert RESOURCES_TEST['shortest_path_engine']
 
 
