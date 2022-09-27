@@ -115,7 +115,11 @@ def human_readable_bytes(n_bytes: int) -> str:
     return f'{n_bytes * 10**(-k*3):.2f} {suffix}'
 
 
-class CSVFormatProblem(Exception):
+class SourceUnusable(Exception):
+    pass
+
+
+class CSVFormatProblem(SourceUnusable):
     pass
 
 
@@ -140,6 +144,19 @@ class UnsupportedDateFormat(CSVFormatProblem):
         super().__init__(f'Unable to infer date format from "{date}". See documentation of `odmkraken.extract.infer_format`.')
 
 
+class FileIsEmpty(CSVFormatProblem):
+
+    def __init__(self):
+        super().__init__('Expected CSV header, but instead the file (or its first line) is empty')
+
+
+class FileHasNoData(SourceUnusable):
+
+    def __init__(self):
+        super().__init__('File is correctly formed (i.e. it has the correct CSV header) but is otherwise empty (or at least one if its first rows of data is)')
+
+
+
 def infer_format(handle: typing.IO):
     # TODO: this is not very robust. But instead of developing it further
     # we should take this to the next level and invest in a pandas-based
@@ -149,6 +166,8 @@ def infer_format(handle: typing.IO):
     
     match = re.match(f'[a-zA-Z0-9_]+["\']? *({seps})', lines[0])
     if not match:
+        if len(lines[0]) == 0:
+            raise FileIsEmpty()
         raise UnkownCSVDialect()
     format = {'sep': match.group(1)}
     
@@ -158,6 +177,9 @@ def infer_format(handle: typing.IO):
     if missing:
         raise HeaderLacksField(iter(missing))
 
+    if any(len(l)==0 for l in lines[1:]):
+        raise FileHasNoData()
+    
     i_datum = header.index('DATUM')
     datum = lines[1].split(format['sep'])[i_datum]
     
