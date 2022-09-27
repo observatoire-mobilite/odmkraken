@@ -85,7 +85,6 @@ class PostgresConnector:
         with self.cursor() as cur:
             sep_lit = sql.Literal(separator)
             query = sql.SQL('COPY {} FROM STDIN WITH (FORMAT csv, DELIMITER {}, HEADER 1)').format(tbl_id, sep_lit)
-            print(query.as_string(cur))
             cur.copy_expert(query, handle)
 
     def execute_batch(self, query: str, data: typing.List[typing.Tuple[typing.Any, ...]], cursor=None):

@@ -30,6 +30,11 @@ class NewData:
     sep: str
     date: str
     lines: typing.Optional[int] = None
+    table: typing.Optional[str] = None
+
+    def __post_init__(self):
+        if self.table is None:
+            self.table = '_import_' + str(uuid.uuid4())[:8]
 
 
 @dagster.op(required_resource_keys={'edmo_vehdata'}, config_schema={'file': str})
@@ -63,7 +68,7 @@ def extract_from_csv(context: dagster.OpExecutionContext) -> NewData:
 
     # dump contents of file into a newly created table
     context.log.info('loading raw data into staging table ...')
-    nd.lines = context.resources.edmo_vehdata.import_csv_file(handle, sep=nd.sep)
+    nd.lines = context.resources.edmo_vehdata.import_csv_file(handle, sep=nd.sep, table=nd.table)
     context.log.info(f'ingested {nd.lines} lines')
 
     return nd
@@ -72,14 +77,14 @@ def extract_from_csv(context: dagster.OpExecutionContext) -> NewData:
 @dagster.op(required_resource_keys={'edmo_vehdata'})
 def adjust_dates(context: dagster.OpExecutionContext, nd: NewData) -> NewData:
     context.log.info('adjusting staging table\'s date columns ...')
-    context.resources.edmo_vehdata.adjust_date(nd.date)
+    context.resources.edmo_vehdata.adjust_date(nd.date, table=nd.table)
     return nd
 
 
 @dagster.op(required_resource_keys={'edmo_vehdata'})
 def load_data(context: dagster.OpExecutionContext, nd: NewData):
     context.log.info('loading data into analytical tables ...')
-    context.resources.edmo_vehdata.transform_data(nd.file, nd.checksum)
+    context.resources.edmo_vehdata.transform_data(nd.file, nd.checksum, table=nd.table)
 
 
 @dagster.graph()

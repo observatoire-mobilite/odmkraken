@@ -13,6 +13,18 @@ def test_filealreadyimportederror():
     assert str(file) in str(err)
 
 
+def test_newdata():
+    nd = NewData(file=Path('test.zip.csv'), checksum=b'asdf', sep=',', date='moin', lines=2)
+    assert nd.checksum == b'asdf'
+    assert nd.table.startswith('_import_')
+    assert len(nd.table) == len('_import_') + 8
+
+    # check ids are unique
+    ids = {NewData(file=Path('test.zip.csv'), checksum=b'asdf', sep=',', date='moin', lines=2).table
+           for i in range(30)}
+    assert len(ids) == 30
+
+
 def test_extract_from_csv(mocker):
     fake_edmo = mocker.patch('odmkraken.resources.edmo.busdata.EDMOVehData', autospec=True)
     fake_of = mocker.patch('odmkraken.busspeeds.extract.open_file')
@@ -189,5 +201,3 @@ def test_compute_checksum(mocker):
     fake_handle.seek.assert_called_with(0)
     assert fake_handle.seek.call_count == 2
     fake_hash.digest.assert_called_once_with()
-
-
