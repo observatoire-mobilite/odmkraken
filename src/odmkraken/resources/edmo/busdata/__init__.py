@@ -102,9 +102,9 @@ class EDMOVehData(EDMOData):
             cur.execute(sql.drop_staging_table(staging_table=table, schema=self.vehdata_schema))     
         
 
-@dagster.resource(required_resource_keys={'postgres_connection'})
+@dagster.resource(required_resource_keys={'local_postgres'})
 def edmo_vehdata(init_context: dagster.InitResourceContext) -> EDMOVehData:
-    return EDMOVehData(init_context.resources.postgres_connection)
+    return EDMOVehData(init_context.resources.local_postgres)
 
 
 @dagster.resource(required_resource_keys={'edmo_vehdata'})
