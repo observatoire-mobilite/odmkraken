@@ -1,0 +1,29 @@
+name: Run package tests
+
+on: [push]
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install conda environment
+      uses: mamba-org/provision-with-micromamba@main
+      with:
+        environment-name: test
+        cache-env: true
+        environment-file: false
+        channels: conda-forge,observatoire-mobilite
+        extra-specs: |
+          python=3.10
+          pytest
+          pytest-cov
+          pytest-mock
+    - name: Test with pytest
+      shell: bash -l {0}
+      run: |
+        pytest
