@@ -1,0 +1,44 @@
+# this sets up "context variables" (in this case name and version) that
+# can later be used in Jinja expressions
+
+# top level package information (name and version)
+package:
+  name: odmkraken
+  version: "{{ REQUESTED_VERSION }}"
+
+# location to get the source from
+source:
+  path: '../'
+
+requirements:
+  host:
+    - python >=3.8,<3.11
+  run:
+    - dagster >=1.0.10
+    - psycopg2
+    - mapmatcher
+  build:
+    - pip
+    - setuptools >=56
+    - setuptools_scm >=3.4.1
+  test:
+    - pytest >=7.0
+    - pytest-cov
+    - black
+    - mypy
+
+# build number (should be incremented if a new build is made, but version is not incrementing)
+build:
+  number: {{ REQUESTED_BUILD_NUMBER }}
+  noarch: python
+  script: {{ PYTHON }} -m pip install -t $SP_DIR .  # [not win]
+  script: {{ PYTHON }} -m pip install -t %SP_DIR% . # [win]
+
+# information about the package
+about:
+  home: https://github.com/observatoire-mobilite/odmkraken
+  license: MIT
+  summary: 'Warehouse orchestration system.'
+  description: |
+    Warehouse orchesration system.
+  doc_url: https://github.com/observatoire-mobilite/odmkraken/docs
