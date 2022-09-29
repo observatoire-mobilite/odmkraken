@@ -23,8 +23,8 @@ jobs:
           pytest
           pytest-cov
           pytest-mock
-          psycopg2
-          dagster
+          psycopg2=2.9.3
+          dagster=0.16.10
           mapmatcher
     - name: Test with pytest
       shell: bash -l {0}
