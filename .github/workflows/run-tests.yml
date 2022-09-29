@@ -23,7 +23,15 @@ jobs:
           pytest
           pytest-cov
           pytest-mock
+          psycopg2
+          dagster
+          mapmatcher
     - name: Test with pytest
       shell: bash -l {0}
       run: |
         pytest
+    - name: Copy logfiles
+      uses: actions/upload-artifact@v3
+      with:
+        name: code coverage
+        path: cov.xml
