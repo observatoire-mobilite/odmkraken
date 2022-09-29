@@ -30,6 +30,7 @@ requirements:
 # build number (should be incremented if a new build is made, but version is not incrementing)
 build:
   number: {{ REQUESTED_BUILD_NUMBER }}
+  string: {{ REQUESTED_BUILD_STRING }}
   noarch: python
   script: {{ PYTHON }} -m pip install -t $SP_DIR .  # [not win]
   script: {{ PYTHON }} -m pip install -t %SP_DIR% . # [win]
