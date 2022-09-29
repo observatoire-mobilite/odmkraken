@@ -1,4 +1,4 @@
-name: Build conda packages
+name: Build and upload omkraken conda package
 on: [push]
 jobs:
   build-and-upload:
@@ -29,7 +29,7 @@ jobs:
       run: |
         conda config --set anaconda_upload yes
         mkdir ./dist
-        conda mambabuild -c conda-forge -c observatoire-mobilite --numpy 1.21 --output-folder ./dist --user observatoire-mobilite --token {{ secrets.ANACONDA_TOKEN }} ./conda
+        conda mambabuild -c conda-forge -c observatoire-mobilite --numpy 1.21 --output-folder ./dist --user observatoire-mobilite --token ${{ secrets.ANACONDA_TOKEN }} ./conda
       env:
         REQUESTED_VERSION: 0.1.0a4
         REQUESTED_BUILD_NUMBER: 0
