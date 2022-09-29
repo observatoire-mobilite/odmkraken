@@ -1,11 +1,12 @@
 name: Run package tests
 
 on: [push]
-
 jobs:
   run-tests:
     runs-on: ubuntu-latest
     strategy:
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
       max-parallel: 5
 
     steps:
@@ -19,7 +20,7 @@ jobs:
         environment-file: false
         channels: conda-forge,observatoire-mobilite
         extra-specs: |
-          python=3.10
+          python=${{ matrix.python-version }}
           pytest
           pytest-cov
           pytest-mock
