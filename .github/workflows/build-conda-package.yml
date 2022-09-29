@@ -1,15 +1,18 @@
-name: Build and upload omkraken conda package
-on: [push]
+name: Make release
+
+on:
+  push
+
+#   tags:
+#     - 'v*'
+
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 5
-
     steps:
-    - name: Checkout odmkraken source
-      uses: actions/checkout@v3
-      
+
     - name: Install conda environment
       uses: mamba-org/provision-with-micromamba@main
       with:
@@ -23,7 +26,27 @@ jobs:
           conda-build>=3.22
           boa
           anaconda-client
-        
+          setuptools_scm
+
+    - name: Checkout odmkraken source
+      uses: actions/checkout@v3
+
+    - name: version
+      run: echo "::set-output name=version::$(python -m setuptools_scm)"
+      id: version
+
+    - name: release
+      uses: actions/create-release@v1
+      id: create_release
+      with:
+        draft: false
+        prerelease: false
+        release_name: ${{ steps.version.outputs.version }}
+        tag_name: ${{ github.ref }}
+        body_path: CHANGELOG.md
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+
     - name: Build odmkraken
       shell: bash -l {0}
       run: |
@@ -31,12 +54,10 @@ jobs:
         mkdir ./dist
         conda mambabuild -c conda-forge -c observatoire-mobilite --numpy 1.21 --output-folder ./dist --user observatoire-mobilite --token ${{ secrets.ANACONDA_TOKEN }} ./conda
       env:
-        REQUESTED_VERSION: 0.1.0a4
+        REQUESTED_VERSION: ${{ steps.version.outputs.version }}
         REQUESTED_BUILD_NUMBER: 0
         
     - name: Upload odmkraken package as artifact
       uses: actions/upload-artifact@v3
       with:
-          path: ./dist/noarch/odmkraken-*.tar.bz2
-
-        
+          path: ./dist/noarch/odmkraken-${{ steps.version.outputs.version }}.tar.bz2
