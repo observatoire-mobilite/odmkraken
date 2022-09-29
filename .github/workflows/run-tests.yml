@@ -38,3 +38,14 @@ jobs:
         path: |
           cov.xml
           report.xml
+    - name: Build source distribution
+      shell: bash -l {0}
+      run: |
+        pip install -e .
+        pip install build
+        python -m build --sdist --wheel
+    - name: Recover build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist ${{ matrix.python-version }}
+        path: ./*.whl
