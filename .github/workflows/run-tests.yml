@@ -34,7 +34,7 @@ jobs:
     - name: Copy logfiles
       uses: actions/upload-artifact@v3
       with:
-        name: test reports ${{ matrix.node-version }}
+        name: test reports ${{ matrix.python-version }}
         path: |
           cov.xml
           report.xml
