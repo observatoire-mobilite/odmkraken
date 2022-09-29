@@ -23,13 +23,13 @@ jobs:
           conda-build>=3.22
           boa
           anaconda-client
-          invoke
         
     - name: Build odmkraken
       shell: bash -l {0}
       run: |
+        conda config --set anaconda_upload yes
         mkdir ./dist
-        conda mambabuild ./conda --skip-existing --output-folder ./dist
+        conda mambabuild -c conda-forge -c observatoire-mobilite --numpy 1.21 --output-folder ./dist --user observatoire-mobilite --token {{ secrets.ANACONDA_TOKEN }} ./conda
       env:
         REQUESTED_VERSION: 0.1.0a4
         REQUESTED_BUILD_NUMBER: 0
@@ -37,4 +37,6 @@ jobs:
     - name: Upload odmkraken package as artifact
       uses: actions/upload-artifact@v3
       with:
-          path: ./dist/odmkraken-*.tar.bz2
+          path: ./dist/noarch/odmkraken-*.tar.bz2
+
+        
