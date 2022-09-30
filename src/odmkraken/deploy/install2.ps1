@@ -48,9 +48,9 @@ function Install {
     $LOGS="${Prefix}\logs"
 
     # ensure nginx, config and log directgories exist
-    New-Item -ItemType Directory -Force $ETC, "${ETC}\nginx", "${ETC}\dagster"
+    New-Item -ItemType Directory -Force $ETC, "${ETC}\nginx"
     New-Item -ItemType Directory -Force $LOGS
-    New-Item -ItemType Directory -Force $Env:NGINX_HOME
+    New-Item -ItemType Directory -Force $Env:DAGSTER_HOME, $Env:NGINX_HOME
 
     # variable to collect uninstall instructions
     $Uninstall = @()
@@ -115,7 +115,7 @@ function Install {
     Create-NSSMService -Name "$SRV_DAGIT" `
         -Description "Provides the ETL system the web-interface to control it" `
         -Executable "${SCRIPTS}\dagit.exe" `
-        -Parameters "-l /etl -w ${ETC}\dagster\workspace.yaml" `
+        -Parameters "-l /etl -m odmkraken" `
         -AppDirectory $Env:DAGSTER_HOME `
         -EnvVars "${DAGSTER_VARS}`n$($DSN.EDMO_AOO)`n$($DSN.ODMVP_TEST)`n$($DSN.ODMVP_PROD)" `
         -DependsOn $SRV_PG `
@@ -133,7 +133,7 @@ function Install {
     Create-NSSMService -Name $SRV_DAGSTER `
         -Description "Triggers Dagit-jobs upon certain events or on a schedule." `
         -Executable "${SCRIPTS}\dagster-daemon.exe" `
-        -Parameters "run -w ${ETC}\dagster\workspace.yaml" `
+        -Parameters "run -m odmkraken" `
         -AppDirectory $Env:DAGSTER_HOME `
         -EnvVars $DAGSTER_VARS `
         -DependsOn $SRV_PG `
