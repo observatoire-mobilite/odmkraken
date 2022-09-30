@@ -28,7 +28,7 @@ def fake_pgc(mocker):
 
 
 def test_edmo_vehdata(fake_pgc):
-    ctx = dagster.build_init_resource_context(resources={'postgres_connection': fake_pgc}, config={})
+    ctx = dagster.build_init_resource_context(resources={'local_postgres': fake_pgc}, config={})
     data = edmo_vehdata(ctx)
     assert isinstance(data, EDMOData)
     assert isinstance(data, EDMOVehData)

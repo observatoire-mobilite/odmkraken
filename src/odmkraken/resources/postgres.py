@@ -7,6 +7,7 @@ import dagster
 import warnings
 from io import TextIOBase
 
+
 class PostgresConnector:
     """Convenience wrapper around a `psycopg2 connection."""
 
@@ -92,9 +93,9 @@ class PostgresConnector:
         execute_batch(cursor, query, data)
 
 
-@dagster.resource
+@dagster.resource(config_schema={"dsn": dagster.StringSource})
 @contextmanager
-def postgres_connection(init_context: dagster.InitResourceContext):
+def postgres_connection(init_context: dagster.InitResourceContext,):
     dsn = init_context.resource_config['dsn']
     pgc = PostgresConnector(dsn)
     try:

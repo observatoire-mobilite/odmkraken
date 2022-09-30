@@ -48,9 +48,9 @@ function Install {
     $LOGS="${Prefix}\logs"
 
     # ensure nginx, config and log directgories exist
-    New-Item -ItemType Directory -Force $ETC, "${ETC}\nginx", "${ETC}\dagster"
+    New-Item -ItemType Directory -Force $ETC, "${ETC}\nginx"
     New-Item -ItemType Directory -Force $LOGS
-    New-Item -ItemType Directory -Force $Env:NGINX_HOME
+    New-Item -ItemType Directory -Force $Env:DAGSTER_HOME, $Env:NGINX_HOME
 
     # variable to collect uninstall instructions
     $Uninstall = @()
@@ -63,6 +63,14 @@ function Install {
         --static / $Env:NGINX_HOME
     $Uninstall += "Remove-Item ${ETC}\nginx\nginx.conf"
     
+    @"
+run_coordinator:
+    module: dagster.core.run_coordinator
+    class: QueuedRunCoordinator
+    config:
+        max_concurrent_runs: 4
+"@ | Out-File -Encoding utf8 -FilePath "${Env:DAGSTER_HOME}\dagster.yaml"
+
     # create the database folder
     Write-Output "Initializing Postgres ..."
     $PG_PW_FILE = New-TemporaryFile
@@ -115,7 +123,7 @@ function Install {
     Create-NSSMService -Name "$SRV_DAGIT" `
         -Description "Provides the ETL system the web-interface to control it" `
         -Executable "${SCRIPTS}\dagit.exe" `
-        -Parameters "-l /etl -w ${ETC}\dagster\workspace.yaml" `
+        -Parameters "-l /etl -m odmkraken" `
         -AppDirectory $Env:DAGSTER_HOME `
         -EnvVars "${DAGSTER_VARS}`n$($DSN.EDMO_AOO)`n$($DSN.ODMVP_TEST)`n$($DSN.ODMVP_PROD)" `
         -DependsOn $SRV_PG `
@@ -133,9 +141,9 @@ function Install {
     Create-NSSMService -Name $SRV_DAGSTER `
         -Description "Triggers Dagit-jobs upon certain events or on a schedule." `
         -Executable "${SCRIPTS}\dagster-daemon.exe" `
-        -Parameters "run -w ${ETC}\dagster\workspace.yaml" `
+        -Parameters "run -m odmkraken" `
         -AppDirectory $Env:DAGSTER_HOME `
-        -EnvVars $DAGSTER_VARS `
+        -EnvVars "${DAGSTER_VARS}`n$($DSN.EDMO_AOO)`n$($DSN.ODMVP_TEST)`n$($DSN.ODMVP_PROD)" `
         -DependsOn $SRV_PG `
         -ErrorLog "${LOGS}\dagster-daemon.errors.log" `
         -OutputLog "${LOGS}\dagster-daemon.output.log"
@@ -191,6 +199,8 @@ function Remove {
     $uninstall_services="${Env:CONDA_PREFIX}\uninstall-odmkraken-services.ps1"
     . $uninstall_services
     remove-item $uninstall_services
+    remove-item -recurse ${Env:PGDATA}
+    remove-item -recurse ${Env:DAGSTER_HOME}
 }
 
 
