@@ -1,1 +1,1 @@
-from .busspeeds.repo import repo_busspeeds
+from .busspeeds.repo import busspeeds as repo_busspeeds
