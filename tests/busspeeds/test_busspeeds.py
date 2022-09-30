@@ -3,11 +3,11 @@ from odmkraken.busspeeds.repo import *
 
 
 def test_resources():
-    assert RESOURCES_TEST['postgres_connection']
-    assert RESOURCES_TEST['edmo_vehdata']
-    assert RESOURCES_TEST['shortest_path_engine']
+    assert RESOURCES['local_postgres']
+    assert RESOURCES['edmo_vehdata']
+    assert RESOURCES['shortest_path_engine']
 
 
 def test_initialize():
-    rd = busspeeds_test()
+    rd = busspeeds()
     assert rd.has_job('mapmatch_bus_data')
