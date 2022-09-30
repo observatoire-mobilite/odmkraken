@@ -199,6 +199,8 @@ function Remove {
     $uninstall_services="${Env:CONDA_PREFIX}\uninstall-odmkraken-services.ps1"
     . $uninstall_services
     remove-item $uninstall_services
+    remove-item -recurse ${Env:PGDATA}
+    remove-item -recurse ${Env:DAGSTER_HOME}
 }
 
 
