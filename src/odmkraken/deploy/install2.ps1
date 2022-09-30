@@ -63,6 +63,14 @@ function Install {
         --static / $Env:NGINX_HOME
     $Uninstall += "Remove-Item ${ETC}\nginx\nginx.conf"
     
+    @"
+run_coordinator:
+    module: dagster.core.run_coordinator
+    class: QueuedRunCoordinator
+    config:
+        max_concurrent_runs: 4
+"@ | Out-File -Encoding utf8 -FilePath "${Env:DAGSTER_HOME}\dagster.yaml"
+
     # create the database folder
     Write-Output "Initializing Postgres ..."
     $PG_PW_FILE = New-TemporaryFile
@@ -135,7 +143,7 @@ function Install {
         -Executable "${SCRIPTS}\dagster-daemon.exe" `
         -Parameters "run -m odmkraken" `
         -AppDirectory $Env:DAGSTER_HOME `
-        -EnvVars $DAGSTER_VARS `
+        -EnvVars "${DAGSTER_VARS}`n$($DSN.EDMO_AOO)`n$($DSN.ODMVP_TEST)`n$($DSN.ODMVP_PROD)" `
         -DependsOn $SRV_PG `
         -ErrorLog "${LOGS}\dagster-daemon.errors.log" `
         -OutputLog "${LOGS}\dagster-daemon.output.log"
