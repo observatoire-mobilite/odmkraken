@@ -18,6 +18,3 @@ alter default privileges in schema {{vehdata_schema}} grant SELECT on tables to 
 -- tables for resuls storage
 {% include 'db.results.sql' %}
 {% include 'db.halts.sql' %}
-
--- data transformation mechanism
-{% include 'db.transform.sql' %}
