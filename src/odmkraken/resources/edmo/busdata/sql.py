@@ -1,3 +1,4 @@
+import typing
 from psycopg2.sql import SQL, Identifier, Literal, Composable
 import os
 
@@ -6,13 +7,18 @@ class Query:
 
     def __init__(self, sql: str, **kwargs):
         self.sql = SQL(sql)
+        self._defaults = kwargs
+
+    def defaults(self, schema: str='vehdata') -> typing.Iterator[typing.Tuple[str, typing.Union[str, Identifier, Literal]]]:
+        for tbl in ('vehicles', 'lines', 'stops', 'runs', 'pings', 'pings_from_halts', 'halts', 'data_files', 'data_file_timeframes'):
+            yield (f'{tbl}_table', Identifier(schema, tbl))
+        for obj in ('event_code_to_event_type', 'get_vehicle_halts'):
+            yield obj, Identifier(schema, obj)
+        yield from self._defaults.items()
         
     def __call__(self, schema: str='vehdata', **kwargs):
-        defaults = {f'{tbl}_table': Identifier(schema, tbl)
-                    for tbl in ('vehicles', 'lines', 'stops', 'runs', 'pings', 'pings_from_halts', 'halts', 'data_files', 'data_file_timeframes')}
-        defaults['event_code_to_event_type'] = Identifier(schema, 'event_code_to_event_type')
-        defaults['get_vehicle_halts'] = Identifier(schema, 'get_vehicle_halts')
-        kwargs.update(defaults)
+        for key, val in self.defaults(schema):
+            kwargs.setdefault(key, val)
         for key, value in kwargs.items():
             if isinstance(value, Composable):
                 continue
