@@ -46,6 +46,15 @@ class Release(enum.IntEnum):
         return ''
 
 
+class WrongBranch(Exception):
+    
+    def __init__(self, required_branch: str, current_branch: typing.Optional[str]=None):
+        self.required_branch = str(required_branch)
+        self.current_branch = str(current_branch) if current_branch else '(unkown)'
+        super().__init__(f'expected repository checked out to branch "{self.required_branch}" '
+                         f'but instead it is in "{self.current_branch}"')
+
+
 @dataclass(order=True)
 class Version:
     major: int=0
@@ -70,8 +79,14 @@ class Version:
         return cls(*v.version, *pre, int(distance), hash, dirty=len(_) > 0)
 
     @classmethod
-    def from_git(cls):
-        ret = subprocess.run(['git', 'describe', '--tags', '--long', '--dirty'], capture_output=True, check=True, text=True)
+    def from_git(cls, require_branch: typing.Optional[str]=None):
+        ret = subprocess.run(['git', 'symbolic-ref', '--short', 'HEAD'],
+                             capture_output=True, check=True, text=True)
+        current_branch = str(ret.stdout.strip())
+        if require_branch and current_branch != require_branch:
+            raise WrongBranch(require_branch, current_branch)
+        ret = subprocess.run(['git', 'describe', '--tags', '--long', '--dirty'], 
+                             capture_output=True, check=True, text=True)
         return cls.from_str(str(ret.stdout))
 
     def __str__(self) -> str:
@@ -145,6 +160,12 @@ def main():
 
 @main.command()
 def version():
+    """Display the current version of the code.
+
+    This uses conda-buildstrings to provide additional information
+    in case the code does not correspond exactly to a known git tag.
+    It follows the same convetion as `setuptools_scm`, meaning.
+    """
     v = Version.from_git()
     print(v)
 
@@ -157,9 +178,52 @@ def version():
 @click.option('--beta', '-b', is_flag=True)
 @click.option('--rc', '-c', is_flag=True)
 @click.option('--release', '-R', is_flag=True)
-@click.option('--allow-dirty', '-d', is_flag=True)
-def bump(major, minor, revision, alpha, beta, rc, release, allow_dirty):
+@click.option('--allow-dirty', '-w', is_flag=True)
+@click.option('--dry-run', is_flag=True)
+@click.option('--no-push', is_flag=True)
+def bump(major, minor, revision, alpha, beta, rc, release, allow_dirty, dry_run, no_push):
+    """Tag current commit with next version in line.
+
+    This script will (1) determine the next version in line by the
+    provided argument(s) (see below), (2) tag the current revision
+    as 'v<result-of-1>' and (3) push the result to 'origin'.
+
+    Note: must be called on `main` to help keep the code history
+    clean. 
     
+    Also note: pushing tags might trigger build actions on GitHub.
+
+    How versionning works: the basis for versionning is the release
+    status. It can be `alpha`, `beta`, `release candidate` or `rc`
+    or `release`. The idea is that a version, say 0.1.0, goes through
+    each of the four states, where only the last is called 0.1.0.
+    Before, there are a set of pre-releases, which can be either
+    alpha, beta or rc releases. Pre-releases of the same class can
+    be further distinguished by pre-release numbers. Meaning e.g.
+    there could e.g. be a 0.1.0a1, followed by 0.1.0b1 and b2. In
+    other words, we consider:
+    0.1.0 > 0.1.0rc1 > 0.1.0b1 > 0.1.0a2 > 0.1.0a1
+
+    How version bumping works: 
+        * no arguments: the pre-release number increases, meaning
+            e.g. 0.1.0a1 becomes 0.1.0a2, and 0.1.0b1 becomes 0.1.0b2.
+        * to jump to the next release status, use the corresponding flag
+            e.g. calling `--beta` on 0.1.0a3 will produce 0.1.0b1. You can
+            skip states, i.e. from alpha to rc or even release. In each case,
+            the pre-release number will reset to 1.
+        * calling `--release` removes the pre-release flags. Releases have no
+            more pre-release flage, maining there can only be one.
+        * calling with a release status inferior to the current one, e.g.
+            going from 'release' to 'alpha', is considered as jumping to the
+            next version. Therefore one of `--major`, `--minor` or `--revision`
+            must be specified to let the system know which one to increase.
+            E.g. calling `--alpha --revision` on 0.1.0 will produce 0.1.1a1.
+        * calling `--major`, `--minor` or `--revision` without a specific
+            release state is implicitly considered as a return to `--alpha`.
+
+    The `--dry-run` allows peeking ahead to the next version, i.e. the next version
+    is calculated but no tag is made or push. `--no-push` only creates the tag locally.
+    """
     if alpha:
         kind = Release.alpha
     elif beta:
@@ -171,17 +235,26 @@ def bump(major, minor, revision, alpha, beta, rc, release, allow_dirty):
     else:
         kind = None
 
-    v = Version.from_git()
+    try:
+        v = Version.from_git(require_branch='main')
+    except WrongBranch as e:
+        print(f'ERROR: the checked out branch is "{e.current_branch}"; '
+              'new version tags may only be created in "main".')
+        print('Hint: check out main')
+        sys.exit(1)
+
     if not allow_dirty and v.dirty:
         print('ERROR: cannot bump version as long as there are uncommitted changes')
         print('Hint: the `--allow-dirty` switch allows to skip this check')
         sys.exit(1)
     v = v.bump(major=major, minor=minor, revision=revision, kind=kind)
     d = datetime.now()
-    subprocess.run(['git', 'tag', '-a', f'v{v}', f'-m "version {v} created on {d}"'])
-    subprocess.run(['git', 'push', 'origin', f'v{v}'])
+    if not dry_run:
+        subprocess.run(['git', 'tag', '-a', f'v{v}', f'-m "version {v} created on {d}"'])
+        if not no_push:
+            subprocess.run(['git', 'push', 'origin', f'v{v}'])
     print(v)
-
+    
 
 if __name__ == '__main__':
     main()
