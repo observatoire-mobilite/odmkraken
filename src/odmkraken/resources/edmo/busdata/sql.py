@@ -14,9 +14,11 @@ class Query:
         defaults['get_vehicle_halts'] = Identifier(schema, 'get_vehicle_halts')
         kwargs.update(defaults)
         for key, value in kwargs.items():
-            if key.endswith('_table') and isinstance(value, str):
+            if isinstance(value, Composable):
+                continue
+            if key.endswith('_table'):
                 kwargs[key] = Identifier(schema, value)
-            if not isinstance(value, Composable):
+            else:
                 kwargs[key] = Literal(value)
         return self.sql.format(**kwargs)
 
