@@ -159,7 +159,9 @@ def main():
 
 
 @main.command()
-def version():
+@click.option('--version-only', is_flag=True)
+@click.option('--build-string-only', is_flag=True)
+def version(version_only=False, build_string_only=False):
     """Display the current version of the code.
 
     This uses conda-buildstrings to provide additional information
@@ -167,7 +169,12 @@ def version():
     It follows the same convetion as `setuptools_scm`, meaning.
     """
     v = Version.from_git()
-    print(v)
+    if version_only:
+        print(v.version_string())
+    elif build_string_only:
+        print(v.build_string())
+    else:
+        print(v)
 
 
 @main.command()
