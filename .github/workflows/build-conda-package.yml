@@ -33,9 +33,9 @@ jobs:
     - name: version
       shell: bash -l {0}
       run: |
-        echo "::set-output name=release::$(python ./conda/build.py version)"
-        echo "::set-output name=version::$(python ./conda/build.py version --version-only)"
-        echo "::set-output name=buildstr::$(python ./conda/build.py version --build-string-only)"
+        echo "::set-output name=release::$(python ./release.py version)"
+        echo "::set-output name=version::$(python ./release.py version --version-only)"
+        echo "::set-output name=buildstr::$(python ./release.py version --build-string-only)"
       id: version
 
     - name: release
