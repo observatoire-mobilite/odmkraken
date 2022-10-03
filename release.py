@@ -85,11 +85,12 @@ class Version:
 
     @classmethod
     def from_git(cls, require_branch: typing.Optional[str]=None):
-        ret = subprocess.run(['git', 'symbolic-ref', '--short', 'HEAD'],
+        if require_branch:
+            ret = subprocess.run(['git', 'symbolic-ref', '--short', 'HEAD'],
                              capture_output=True, check=True, text=True)
-        current_branch = str(ret.stdout.strip())
-        if require_branch and current_branch != require_branch:
-            raise WrongBranch(require_branch, current_branch)
+            current_branch = str(ret.stdout.strip())
+            if current_branch != require_branch:
+                raise WrongBranch(require_branch, current_branch)
         ret = subprocess.run(['git', 'describe', '--tags', '--long', '--dirty'], 
                              capture_output=True, check=True, text=True)
         return cls.from_str(str(ret.stdout))

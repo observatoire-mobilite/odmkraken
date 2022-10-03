@@ -1,1 +1,1 @@
-Trying my luck with a new release: this should build now, fully automatically, upon calling `release.py bump`
+And yet another release tot test the build system.
