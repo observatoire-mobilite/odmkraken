@@ -1,5 +1,4 @@
 import typing
-from distutils.version import StrictVersion
 import subprocess
 import sys
 import enum
@@ -7,6 +6,7 @@ from dataclasses import dataclass, field, asdict
 from contextlib import suppress
 from datetime import datetime
 import click
+import re
 
 
 class Release(enum.IntEnum):
@@ -69,14 +69,19 @@ class Version:
     @classmethod
     def from_str(cls, txt: str):
         raw_ver, distance, hash, *_ = txt.strip().split('-')
-        v = StrictVersion(raw_ver[1:] if raw_ver.startswith('v') else raw_ver)
-        if v.prerelease is None:
-            pre = (Release.release, 0)
-        elif len(v.prerelease) == 1:
-            pre = (Release.from_code(v.prerelease[0]), 0)
-        else:
-            pre = (Release.from_code(v.prerelease[0]), int(v.prerelease[1]))
-        return cls(*v.version, *pre, int(distance), hash, dirty=len(_) > 0)
+        match = re.match('^v?(\d+)\.(\d+)(?:\.(\d+))?(?:(a|b|rc)([0-9]+))?$', raw_ver)
+        if not match:
+            raise ValueError(f'unable to interpret version string "{raw_ver}"')
+        
+        def _c(s) -> int:
+            if s is None:
+                return 0
+            if s.isdigit():
+                return int(s)
+            return Release.from_code(s)
+        
+        v = (_c(s) for s in match.groups())
+        return cls(*v, int(distance), hash, dirty=len(_) > 0)
 
     @classmethod
     def from_git(cls, require_branch: typing.Optional[str]=None):
