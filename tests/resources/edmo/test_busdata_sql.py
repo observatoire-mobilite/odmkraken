@@ -2,7 +2,7 @@ import pytest
 from odmkraken.resources.edmo.busdata.sql import *
 
 
-def test_query_init():
+def test_query_init(mocker):
     s = mocker.patch('odmkraken.resources.edmo.busdata.sql.SQL', autospec=True)
     q = Query('test')
     s.assert_called_once_with('test')
