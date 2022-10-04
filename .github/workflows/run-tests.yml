@@ -11,7 +11,7 @@ jobs:
         env:
           POSTGRES_DB: postgres
           POSTGRES_USER: postgres
-          POSTGRES_PASS_FILE: /run/secrets/pg_root_password
+          POSTGRES_PASS: postgres
           ALLOW_IP_RANGE: 0.0.0.0/0
           POSTGRES_MULTIPLE_EXTENSIONS: postgis,postgis_topology,postgis_raster,pgrouting
         ports:
