@@ -92,17 +92,15 @@ with new_vehicles as (
 ''')
 
 extract_stops = Query(r'''
-with new_stops as (
-    insert into {stops_table} (code, first_seen)
-        select
-            "HALT" as code,
-            min(zeit) as first_seen
-        from {staging_table}
-        where "HALT" is not null
-        group by "HALT"
-    on conflict (code) do nothing
-    returning id, code
-) select * from new_stops;)
+insert into {stops_table} (code, first_seen)
+    select
+        "HALT" as code,
+        min(zeit) as first_seen
+    from {staging_table}
+    where "HALT" is not null
+    group by "HALT"
+on conflict (code) do nothing
+returning id, code
 ''')
 
 extract_lines = Query(r'''
