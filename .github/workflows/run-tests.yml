@@ -14,11 +14,6 @@ jobs:
           POSTGRES_PASS_FILE: /run/secrets/pg_root_password
           ALLOW_IP_RANGE: 0.0.0.0/0
           POSTGRES_MULTIPLE_EXTENSIONS: postgis,postgis_topology,postgis_raster,pgrouting
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 10s
-          --health-retries 5
         ports:
           - 5432:5432
     
