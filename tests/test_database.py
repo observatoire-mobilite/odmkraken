@@ -7,4 +7,4 @@ def test_db():
   with conn.cursor() as cur:
     cur.execute('select version()')
     ver = cur.fetchone()
-  assert 'Postgres' in ver[0]
+  assert 'PostgreSQL' in ver[0]
