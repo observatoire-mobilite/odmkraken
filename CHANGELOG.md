@@ -1,1 +1,1 @@
-And yet another release tot test the build system.
+This fixes the `KeyError` of a missing `srid` key in the `odmkraken.resources.edmo.busspeeds.sql` module.
