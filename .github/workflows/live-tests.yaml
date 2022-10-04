@@ -1,0 +1,65 @@
+name: Run live tests
+
+on: [push]
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: kartoza/postgis:14-3.1
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASS: postgres
+          ALLOW_IP_RANGE: 0.0.0.0/0
+          POSTGRES_MULTIPLE_EXTENSIONS: postgis,postgis_topology,postgis_raster,pgrouting
+        ports:
+          - 5432:5432
+    
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10"]
+      max-parallel: 5
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install conda environment
+      uses: mamba-org/provision-with-micromamba@main
+      with:
+        environment-name: test
+        cache-env: true
+        environment-file: false
+        channels: conda-forge,observatoire-mobilite
+        extra-specs: |
+          python=${{ matrix.python-version }}
+          pytest
+          pytest-cov
+          pytest-mock
+          psycopg2
+          dagster>=1.0.10
+          mapmatcher
+    
+    - name: Set up database
+      id: db
+      shell: bash -l {0}
+      run: |
+        python -m odmkraken.deploy setup --dbname "${DBNAME}"
+        echo  "::set-output name=dsn_edmo_aoo::$(python -m odmkraken.deploy resetpw "${DBNAME}_aoo" --dsn)/${DBNAME})"
+      env:
+        PGHOST: localhost
+        PGPORT: 5432
+        PGUSER: postgres
+        PGPASS: postgres
+        DBNAME: edmo
+    
+    - name: Run icts_data
+      shell: bash -l {0}
+      run: |
+        echo "{ops: {extract_from_csv: {config: {file: "${FILE}"}}}, resources: {local_postgres: {config: {dsn: {env: "${DSN}"}}}}}" > icts_data_job.yaml
+        dagster job execute -m odmkraken -j icts_data -c icts_data_job.yaml
+      env:
+        DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
+        FILE: tests/testdata.csv.zip
+    
