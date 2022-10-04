@@ -60,7 +60,8 @@ def test_query_defaults(fake_sql):
 
 
 def test_adjust_date(mocker):
-    assert adjust_date._defaults['srid'] == Literal(2169)
+    assert adjust_date._defaults['system_srid'] == Literal(2169)
+    assert adjust_date._defaults['input_srid'] == Literal(4326)
     q = adjust_date(schema='test', staging_table='stage', date_format='%Y%m%d')
 
     

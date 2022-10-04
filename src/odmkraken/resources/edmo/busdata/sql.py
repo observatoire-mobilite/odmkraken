@@ -59,21 +59,21 @@ drop table if exists {staging_table};
 adjust_date = Query('''
 alter table {staging_table} add column zeit timestamp;
 alter table {staging_table} add column sollzeit timestamp;
-alter table {staging_table} add column position geometry(POINT, {srid});
+alter table {staging_table} add column position geometry(POINT, {system_srid});
 update {staging_table} set zeit = to_date("DATUM", {date_format}) + "ZEIT"::interval where "ZEIT" is not null;
 update {staging_table} set sollzeit = to_date("DATUM", {date_format}) + "SOLLZEIT"::interval where "SOLLZEIT" is not null;
 update {staging_table} 
     set position = ST_Transform(
         ST_SetSRID(ST_Point(regexp_replace("LONGITUDE", '(\d+)(?:[\.,](\d+))?', '\1.\2')::double precision,
                             regexp_replace("LATITUDE", '(\d+)(?:[\.,](\d+))?', '\1.\2')::double precision), 
-                    input_srid),
-        {srid}) where "LONGITUDE" is not null and "LATITUDE" is not null;
+                   {input_srid}),
+        {system_srid}) where "LONGITUDE" is not null and "LATITUDE" is not null;
 alter table {staging_table} drop column "ZEIT";
 alter table {staging_table} drop column "SOLLZEIT";
 alter table {staging_table} drop column "DATUM";
 alter table {staging_table} drop column "LATITUDE";
 alter table {staging_table} drop column "LONGITUDE";
-''', srid=Literal(2169))
+''', system_srid=Literal(2169), input_srid=Literal(4326))
 
 extract_vehicles = Query('''
 with new_vehicles as (
