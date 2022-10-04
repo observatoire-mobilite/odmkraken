@@ -12,6 +12,9 @@ jobs:
       max-parallel: 5
     steps:
 
+    - name: Checkout odmkraken source
+      uses: actions/checkout@v3
+
     - name: Install conda environment
       uses: mamba-org/provision-with-micromamba@main
       with:
@@ -21,10 +24,8 @@ jobs:
         environment-file: ./conda/build-env.yml
         channels: conda-forge,observatoire-mobilite
 
-    - name: Checkout odmkraken source
-      uses: actions/checkout@v3
-
     - name: version
+      id: version
       shell: bash -l {0}
       run: |
         RELEASE=$(python ./release.py version)
@@ -38,8 +39,7 @@ jobs:
         echo "::set-output name=buildstr::${BLDSTR}"
         echo "::set-output name=is_prerelease::${PREREL}"
         echo "::set-output name=buildnbr::1"
-      id: version
-
+      
     - name: release
       uses: actions/create-release@v1
       id: create_release
