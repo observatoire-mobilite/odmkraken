@@ -159,7 +159,7 @@ select
     min(time_start) as time_start,
     max(time_end) as time_end
 from runs
-group by run_vehicle_id
+group by vehicle_id
 ''')
 
 extract_pings = Query(r'''
