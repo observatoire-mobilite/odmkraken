@@ -41,20 +41,3 @@ jobs:
       with:
         name: odmkraken-py${{ matrix.python-version }}-pytest-coverage.xml
         path: cov.xml
-    - name: Build source distribution
-      shell: bash -l {0}
-      run: |
-        pip install -e .
-        pip install build
-        mkdir ./dist
-        python -m build --sdist --wheel --outdir ./dist
-    - name: Recover wheel
-      uses: actions/upload-artifact@v3
-      with:
-        name: odmkraken-py${{ matrix.python-version }}.whl
-        path: ./dist/odmkraken-*.whl
-    - name: Recover sdist
-      uses: actions/upload-artifact@v3
-      with:
-        name: odmkraken-py${{ matrix.python-version }}.tar.gz
-        path: ./dist/odmkraken-*.tar.gz
