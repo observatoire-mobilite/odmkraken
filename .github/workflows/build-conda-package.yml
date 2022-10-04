@@ -30,8 +30,9 @@ jobs:
       run: |
         RELEASE=$(python ./release.py version)
         
-        VERSION=$(echo $RELEASE | sed -e 's/+.*$//')
-        BLDSTR=$(echo $RELEASE | sed -e 's/^.*+//')
+        rxp='^([^+]+)\+([^+]+)$'
+        VERSION=${RELEASE%+*}
+        BLDSTR='py_1'; [[ $RELEASE =~ '+' ]] && BLDSTR=${RELEASE#*+}
         PREREL=false; [[ $VERSION =~ (a|b|rc)[0-9]+$ ]] && PREREL=true
         
         echo "::set-output name=release::${RELEASE}"
