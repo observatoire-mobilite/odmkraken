@@ -10,7 +10,7 @@ class Query:
         self._defaults = kwargs
 
     def defaults(self, schema: str='vehdata') -> typing.Iterator[typing.Tuple[str, typing.Union[str, Identifier, Literal]]]:
-        for tbl in ('vehicles', 'lines', 'stops', 'runs', 'pings', 'pings_from_stops', 'halts', 'data_files', 'data_file_timeframes'):
+        for tbl in ('vehicles', 'lines', 'stops', 'runs', 'pings', 'pings_from_', 'halts', 'data_files', 'data_file_timeframes'):
             yield (f'{tbl}_table', Identifier(schema, tbl))
         for obj in ('event_code_to_event_type', 'get_vehicle_halts'):
             yield obj, Identifier(schema, obj)
@@ -163,49 +163,49 @@ group by vehicle_id
 ''')
 
 extract_pings = Query(r'''
- insert into {pings_table} (vehicle_id, time, position)
-    select
-        v.id as vehicle_id,
-        zeit as time,
-        position
-    from {staging_table}
-    left join {vehicles_table} as v on "FAHRZEUG" = v.original_code
-    left join {stops_table} s on s.code = "HALT"
-    where "TYP" = -1
-    on conflict(vehicle_id, time) do nothing;
+insert into {pings_table} (vehicle_id, time, position)
+select
+    v.id as vehicle_id,
+    zeit as time,
+    position
+from {staging_table}
+left join {vehicles_table} as v on "FAHRZEUG" = v.original_code
+left join {stops_table} s on s.code = "HALT"
+where "TYP" = -1
+on conflict(vehicle_id, time) do nothing;
 
-    insert into {pings_from_stops_table} (vehicle_id, time, position, kind, stop_id, 
-                                          expected_time, count_people_boarding, count_people_disembarking)
-    select
-        v.id as vehicle_id,
-        zeit as time,
-        position,
-        {event_code_to_event_type}("TYP") as kind,
-        s.id as stop_id,
-        sollzeit as expected_time,
-        "EINSTEIGER" as count_people_boarding,
-        "AUSSTEIGER" as count_people_disembarking      
-    from {staging_table}
-    left join {vehicles_table} as v 
-    --on regexp_replace("FAHRZEUG", '(\d+) *- *(\w+)', '\1 - \2') = v.code::varchar || ' - ' || v.plate
-    on v.original_code = "FAHRZEUG"
-    left join {stops_table} s on s.code = "HALT"
-    where "TYP" != -1
-    on conflict(vehicle_id, time) do nothing;
+insert into {pings_from_stops_table} (vehicle_id, time, position, kind, stop_id, 
+                                        expected_time, count_people_boarding, count_people_disembarking)
+select
+    v.id as vehicle_id,
+    zeit as time,
+    position,
+    {event_code_to_event_type}("TYP") as kind,
+    s.id as stop_id,
+    sollzeit as expected_time,
+    "EINSTEIGER" as count_people_boarding,
+    "AUSSTEIGER" as count_people_disembarking      
+from {staging_table}
+left join {vehicles_table} as v 
+--on regexp_replace("FAHRZEUG", '(\d+) *- *(\w+)', '\1 - \2') = v.code::varchar || ' - ' || v.plate
+on v.original_code = "FAHRZEUG"
+left join {stops_table} s on s.code = "HALT"
+where "TYP" != -1
+on conflict(vehicle_id, time) do nothing;
 
-    -- delete duplicate entries:
-    -- sometimes, there is a ping of TYP >=0 arriving together with a
-    -- ping of TYP=-1. Those cause problems, and at least in a few spot
-    -- checks the position data was exactly the same. So we drop them here:
-    delete from only {pings_table} p
-    using (
-        select v.id as vehicle_id, r.zeit as time
-        from {staging_table} r
-        left join {vehicles_table} v on v.original_code = r."FAHRZEUG"
-        group by v.id, r.zeit
-        having count(*) > 1
-    ) as d
-    where (p.vehicle_id = d.vehicle_id and p.time = d.time);)
+-- delete duplicate entries:
+-- sometimes, there is a ping of TYP >=0 arriving together with a
+-- ping of TYP=-1. Those cause problems, and at least in a few spot
+-- checks the position data was exactly the same. So we drop them here:
+delete from only {pings_table} p
+using (
+    select v.id as vehicle_id, r.zeit as time
+    from {staging_table} r
+    left join {vehicles_table} v on v.original_code = r."FAHRZEUG"
+    group by v.id, r.zeit
+    having count(*) > 1
+) as d
+where (p.vehicle_id = d.vehicle_id and p.time = d.time);
 ''')
 
 
