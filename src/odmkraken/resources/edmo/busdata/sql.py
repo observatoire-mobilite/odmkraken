@@ -76,19 +76,17 @@ alter table {staging_table} drop column "LONGITUDE";
 ''', system_srid=Literal(2169), input_srid=Literal(4326))
 
 extract_vehicles = Query(r'''
-with new_vehicles as (
-    insert into {vehicles_table} (code, plate, first_seen, original_code)
-        select
-            substring("FAHRZEUG" from '(\d+)(?: *- *(?:[A-Z]+ *\d+|\w+))?')::integer,
-            regexp_replace(substring("FAHRZEUG" from '\d+(?: *- *([A-Z]+ *\d+|\w+))?'), '([A-Z]{{2}}) *(\d+)', '\1\2'),
-            min(zeit) as first_seen,
-            "FAHRZEUG" as original_code
-        from {staging_table}
-        where "FAHRZEUG" is not null
-        group by "FAHRZEUG"
-    on conflict (code, plate) do nothing
-    returning id as veh_id, code as veh_code, plate as veh_plate
-) select * from new_vehicles;
+insert into {vehicles_table} (code, plate, first_seen, original_code)
+    select
+        substring("FAHRZEUG" from '(\d+)(?: *- *(?:[A-Z]+ *\d+|\w+))?')::integer,
+        regexp_replace(substring("FAHRZEUG" from '\d+(?: *- *([A-Z]+ *\d+|\w+))?'), '([A-Z]{{2}}) *(\d+)', '\1\2'),
+        min(zeit) as first_seen,
+        "FAHRZEUG" as original_code
+    from {staging_table}
+    where "FAHRZEUG" is not null
+    group by "FAHRZEUG"
+on conflict (code, plate) do nothing
+returning id as veh_id, code as veh_code, plate as veh_plate
 ''')
 
 extract_stops = Query(r'''
