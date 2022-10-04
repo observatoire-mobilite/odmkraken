@@ -43,6 +43,7 @@ jobs:
         echo "::set-output name=version::${VERISON}"
         echo "::set-output name=buildstr::${BLDSTR}"
         echo "::set-output name=is_prerelease::${PREREL}"
+        echo "::set-output name=buildnbr::1"
       id: version
 
     - name: release
@@ -66,9 +67,9 @@ jobs:
       env:
         REQUESTED_VERSION: ${{ steps.version.outputs.version }}
         REQUESTED_BUILD_STRING: ${{ steps.version.outputs.buildstr }}
-        REQUESTED_BUILD_NUMBER: 1
+        REQUESTED_BUILD_NUMBER: ${{ steps.version.outputs.buildnbr }}
         
     - name: Upload odmkraken package as artifact
       uses: actions/upload-artifact@v3
       with:
-          path: ./dist/noarch/odmkraken-${{ steps.version.outputs.release }}.tar.bz2
+          path: ./dist/noarch/odmkraken-${{ steps.version.outputs.release }}-py_${{ steps.version.outputs.buildnbr }}.tar.bz2
