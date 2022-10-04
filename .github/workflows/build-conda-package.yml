@@ -18,14 +18,8 @@ jobs:
         environment-name: build
         cache-env: true
         cache-downloads: true
-        environment-file: false
+        environment-file: ./conda/build-env.yml
         channels: conda-forge,observatoire-mobilite
-        extra-specs: |
-          python>=3.10
-          conda-build>=3.22
-          boa>=0.10
-          anaconda-client>=1.0.0
-          click>=8.0.0
 
     - name: Checkout odmkraken source
       uses: actions/checkout@v3
