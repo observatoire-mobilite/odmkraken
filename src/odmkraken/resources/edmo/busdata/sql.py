@@ -29,7 +29,7 @@ class Query:
         return self.sql.format(**kwargs)
 
 
-create_staging_table = Query('''
+create_staging_table = Query(r'''
 drop table if exists {staging_table};
 create table {staging_table} (
     "TYP" integer,
@@ -47,16 +47,16 @@ create table {staging_table} (
     "AUSSTEIGER" integer
 );''')
 
-len_staging_table = Query('''
+len_staging_table = Query(r'''
 select count(*) from {staging_table};
 ''')
 
-drop_staging_table = Query('''
+drop_staging_table = Query(r'''
 drop table if exists {staging_table};
 ''')
 
 
-adjust_date = Query('''
+adjust_date = Query(r'''
 alter table {staging_table} add column zeit timestamp;
 alter table {staging_table} add column sollzeit timestamp;
 alter table {staging_table} add column position geometry(POINT, {system_srid});
@@ -75,7 +75,7 @@ alter table {staging_table} drop column "LATITUDE";
 alter table {staging_table} drop column "LONGITUDE";
 ''', system_srid=Literal(2169), input_srid=Literal(4326))
 
-extract_vehicles = Query('''
+extract_vehicles = Query(r'''
 with new_vehicles as (
     insert into {vehicles_table} (code, plate, first_seen, original_code)
         select
@@ -91,7 +91,7 @@ with new_vehicles as (
 ) select * from new_vehicles;
 ''')
 
-extract_stops = Query('''
+extract_stops = Query(r'''
 with new_stops as (
     insert into {stops_table} (code, first_seen)
         select
@@ -105,7 +105,7 @@ with new_stops as (
 ) select * from new_stops;)
 ''')
 
-extract_lines = Query('''
+extract_lines = Query(r'''
 with new_lines as (
     insert into {lines_table} (code, first_seen)
     select
@@ -119,7 +119,7 @@ with new_lines as (
 ) select line_id, line_code from new_lines;
 ''')
 
-extract_runs_with_timeframes = Query('''
+extract_runs_with_timeframes = Query(r'''
 create temporary sequence run_counter;
 select
     run_vehicle_id as vehicle_id,
@@ -168,7 +168,7 @@ from (
 group by run_vehicle_id
 ''')
 
-extract_pings = Query('''
+extract_pings = Query(r'''
  insert into {pings_table} (vehicle_id, time, position)
     select
         v.id as vehicle_id,
@@ -215,33 +215,33 @@ extract_pings = Query('''
 ''')
 
 
-add_data_file = Query('''
+add_data_file = Query(r'''
 insert into {data_files_table} (id, filename, imported_on, checksum) values (gen_random_uuid(), %s, now(), %s) returning id'
 ''')
 
-add_file_timeframes = Query('''
+add_file_timeframes = Query(r'''
 insert into {data_file_timeframes_table} (id, file_id, vehicle_id, time_start, time_end) values (gen_random_uuid(), %s, %s, %s, %s);'
 ''')
 
-vehicle_timeframes_for_file = Query('''
+vehicle_timeframes_for_file = Query(r'''
 select 
     id, vehicle_id, time_start, time_end
 from vehdata.data_file_timeframes
 where file_id=%s''')
 
-vehicle_timeframes_for_period = Query('''
+vehicle_timeframes_for_period = Query(r'''
 select
     id, vehicle_id, time_start, time_end
 from {data_file_timeframes_table}
 where time_start between %s and %s''')
 
 
-file_by_checksum = Query('''
+file_by_checksum = Query(r'''
 select * from {data_files_table} where checksum=%s
 ''')
 
 
-extract_halts = Query('''
+extract_halts = Query(r'''
 insert into {halts_table}
 select * from {get_vehicle_halts}(%s, %s, %s)
 ''')
