@@ -115,20 +115,15 @@ returning id, code
 
 extract_runs_with_timeframes = Query(r'''
 create temporary sequence run_counter;
-select
-    run_vehicle_id as vehicle_id,
-    min(run_time_start) as time_start,
-    max(run_time_end) as time_end
-from (
-    with new_runs as (
-    insert into {runs_table} as r (vehicle_id, line_id, sortie, sortie_flag, run, time_start, time_end)
+with runs as (
+    insert into {runs_table} as r
+    (vehicle_id, line_id, sortie, sortie_flag, run, time_start, time_end)
     select
         vehicle_id,
         line_id,
         case 
-            when 
-                "UMLAUF" similar to '[A-Z]+[0-9]+'
-                then regexp_replace("UMLAUF", '[A-Z]+([0-9]+)', '\1')::integer
+            when "UMLAUF" similar to '[A-Z]+[0-9]+'
+            then regexp_replace("UMLAUF", '[A-Z]+([0-9]+)', '\1')::integer
             else "UMLAUF"::integer
         end as sortie,
         (regexp_match("UMLAUF", '([A-Z]*)[0-9]+'))[1] as sortie_flag,
@@ -142,12 +137,12 @@ from (
             l.id as line_id,
             "UMLAUF",
             "FAHRT",
-            case when
-                lag("LINIE") over (order by "FAHRZEUG", zeit) is distinct from "LINIE" or
-                lag("UMLAUF") over (order by "FAHRZEUG", zeit) is distinct from "UMLAUF" or
-                lag("FAHRT") over (order by "FAHRZEUG", zeit) is distinct from "FAHRT" 
-            then nextval('run_counter')
-            else currval('run_counter')
+            case
+                when (lag("LINIE") over (order by "FAHRZEUG", zeit) is distinct from "LINIE" or
+                        lag("UMLAUF") over (order by "FAHRZEUG", zeit) is distinct from "UMLAUF" or
+                        lag("FAHRT") over (order by "FAHRZEUG", zeit) is distinct from "FAHRT")
+                then nextval('run_counter')
+                else currval('run_counter')
             end as run_id
         from {staging_table}
         left join {vehicles_table} v on v.original_code = "FAHRZEUG" 
@@ -158,7 +153,12 @@ from (
     order by "vehicle_id", "time_start"
     on conflict (vehicle_id, time_start, time_end) do nothing
     returning vehicle_id, time_start, time_end
-) as runs
+)
+select
+    run_vehicle_id as vehicle_id,
+    min(run_time_start) as time_start,
+    max(run_time_end) as time_end
+from runs
 group by run_vehicle_id
 ''')
 
