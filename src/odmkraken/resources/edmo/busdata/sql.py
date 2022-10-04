@@ -155,9 +155,9 @@ with runs as (
     returning vehicle_id, time_start, time_end
 )
 select
-    run_vehicle_id as vehicle_id,
-    min(run_time_start) as time_start,
-    max(run_time_end) as time_end
+    vehicle_id,
+    min(time_start) as time_start,
+    max(time_end) as time_end
 from runs
 group by run_vehicle_id
 ''')
