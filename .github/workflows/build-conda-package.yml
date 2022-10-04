@@ -30,12 +30,12 @@ jobs:
       run: |
         RELEASE=$(python ./release.py version)
         
-        VERSION=$(echo $RELEASE | sed s/+.*$//)
-        BLDSTR=$(echo $RELEASE | sed s/^.*+//)
+        VERSION=$(echo $RELEASE | sed -e 's/+.*$//')
+        BLDSTR=$(echo $RELEASE | sed -e 's/^.*+//')
         PREREL=false; [[ $VERSION =~ (a|b|rc)[0-9]+$ ]] && PREREL=true
         
         echo "::set-output name=release::${RELEASE}"
-        echo "::set-output name=version::${VERISON}"
+        echo "::set-output name=version::${VERSION}"
         echo "::set-output name=buildstr::${BLDSTR}"
         echo "::set-output name=is_prerelease::${PREREL}"
         echo "::set-output name=buildnbr::1"
