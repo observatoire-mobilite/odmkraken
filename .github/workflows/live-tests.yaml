@@ -45,8 +45,8 @@ jobs:
       id: db
       shell: bash -l {0}
       run: |
-        python -m odmkraken.deploy setup --dbname "${DBNAME}"
-        echo  "::set-output name=dsn_edmo_aoo::$(python -m odmkraken.deploy resetpw "${DBNAME}_aoo" --dsn)/${DBNAME})"
+        python -m odmkraken.deploy setup --dbname ${DBNAME}
+        echo  "::set-output name=dsn_edmo_aoo::$(python -m odmkraken.deploy resetpw ${DBNAME}_aoo --dsn)/${DBNAME})"
       env:
         PGHOST: localhost
         PGPORT: 5432
