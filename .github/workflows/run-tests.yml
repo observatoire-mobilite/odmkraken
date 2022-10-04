@@ -4,6 +4,24 @@ on: [push]
 jobs:
   run-tests:
     runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: kartoza/postgis:14-3.1
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASS_FILE: /run/secrets/pg_root_password
+          ALLOW_IP_RANGE: 0.0.0.0/0
+          POSTGRES_MULTIPLE_EXTENSIONS: postgis,postgis_topology,postgis_raster,pgrouting
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
@@ -31,6 +49,11 @@ jobs:
       shell: bash -l {0}
       run: |
         pytest --pastebin=failed --junitxml=./report.xml
+      env:
+        PGHOST: localhost
+        PGPORT: 5432
+        PGUSER: postgres
+        PGPASS: postgres
     - name: Recover test report
       uses: actions/upload-artifact@v3
       with:
@@ -41,20 +64,3 @@ jobs:
       with:
         name: odmkraken-py${{ matrix.python-version }}-pytest-coverage.xml
         path: cov.xml
-    - name: Build source distribution
-      shell: bash -l {0}
-      run: |
-        pip install -e .
-        pip install build
-        mkdir ./dist
-        python -m build --sdist --wheel --outdir ./dist
-    - name: Recover wheel
-      uses: actions/upload-artifact@v3
-      with:
-        name: odmkraken-py${{ matrix.python-version }}.whl
-        path: ./dist/odmkraken-*.whl
-    - name: Recover sdist
-      uses: actions/upload-artifact@v3
-      with:
-        name: odmkraken-py${{ matrix.python-version }}.tar.gz
-        path: ./dist/odmkraken-*.tar.gz
