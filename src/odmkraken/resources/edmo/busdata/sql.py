@@ -47,9 +47,11 @@ create table {staging_table} (
     "AUSSTEIGER" integer
 );''')
 
+
 len_staging_table = Query(r'''
 select count(*) from {staging_table};
 ''')
+
 
 drop_staging_table = Query(r'''
 drop table if exists {staging_table};
@@ -75,6 +77,7 @@ alter table {staging_table} drop column "LATITUDE";
 alter table {staging_table} drop column "LONGITUDE";
 ''', system_srid=Literal(2169), input_srid=Literal(4326))
 
+
 extract_vehicles = Query(r'''
 insert into {vehicles_table} (code, plate, first_seen, original_code)
     select
@@ -89,6 +92,7 @@ on conflict (code, plate) do nothing
 returning id as veh_id, code as veh_code, plate as veh_plate
 ''')
 
+
 extract_stops = Query(r'''
 insert into {stops_table} (code, first_seen)
     select
@@ -101,6 +105,7 @@ on conflict (code) do nothing
 returning id, code
 ''')
 
+
 extract_lines = Query(r'''
 insert into {lines_table} (code, first_seen)
 select
@@ -112,6 +117,7 @@ group by "LINIE"
 on conflict(code) do nothing
 returning id, code
 ''')
+
 
 extract_runs_with_timeframes = Query(r'''
 create temporary sequence run_counter;
@@ -162,6 +168,7 @@ from runs
 group by vehicle_id
 ''')
 
+
 extract_pings = Query(r'''
 insert into {pings_table} (vehicle_id, time, position)
 select
@@ -210,24 +217,29 @@ where (p.vehicle_id = d.vehicle_id and p.time = d.time);
 
 
 add_data_file = Query(r'''
-insert into {data_files_table} (id, filename, imported_on, checksum) values (gen_random_uuid(), %s, now(), %s) returning id'
+insert into {data_files_table} (id, filename, imported_on, checksum) values (gen_random_uuid(), %s, now(), %s) returning id
 ''')
 
+
 add_file_timeframes = Query(r'''
-insert into {data_file_timeframes_table} (id, file_id, vehicle_id, time_start, time_end) values (gen_random_uuid(), %s, %s, %s, %s);'
+insert into {data_file_timeframes_table} (id, file_id, vehicle_id, time_start, time_end) values (gen_random_uuid(), %s, %s, %s, %s);
 ''')
+
 
 vehicle_timeframes_for_file = Query(r'''
 select 
     id, vehicle_id, time_start, time_end
 from vehdata.data_file_timeframes
-where file_id=%s''')
+where file_id=%s
+''')
+
 
 vehicle_timeframes_for_period = Query(r'''
 select
     id, vehicle_id, time_start, time_end
 from {data_file_timeframes_table}
-where time_start between %s and %s''')
+where time_start between %s and %s
+''')
 
 
 file_by_checksum = Query(r'''
