@@ -106,17 +106,15 @@ with new_stops as (
 ''')
 
 extract_lines = Query(r'''
-with new_lines as (
-    insert into {lines_table} (code, first_seen)
-    select
-        "LINIE",
-        min(zeit)
-    from {staging_table}
-    where "LINIE" is not null
-    group by "LINIE"
-    on conflict(code) do nothing
-    returning id, code
-) select line_id, line_code from new_lines;
+insert into {lines_table} (code, first_seen)
+select
+    "LINIE",
+    min(zeit)
+from {staging_table}
+where "LINIE" is not null
+group by "LINIE"
+on conflict(code) do nothing
+returning id, code
 ''')
 
 extract_runs_with_timeframes = Query(r'''

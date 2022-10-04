@@ -69,3 +69,5 @@ def test_extract_vehicles(mocker):
     extract_vehicles(schema='test', staging_table='stage')
     
     
+def test_extract_lines():
+    extract_lines(schema='test', staging_table='stage')
