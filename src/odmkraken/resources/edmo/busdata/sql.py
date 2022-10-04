@@ -80,7 +80,7 @@ with new_vehicles as (
     insert into {vehicles_table} (code, plate, first_seen, original_code)
         select
             substring("FAHRZEUG" from '(\d+)(?: *- *(?:[A-Z]+ *\d+|\w+))?')::integer,
-            regexp_replace(substring("FAHRZEUG" from '\d+(?: *- *([A-Z]+ *\d+|\w+))?'), '([A-Z]{2}) *(\d+)', '\1\2'),
+            regexp_replace(substring("FAHRZEUG" from '\d+(?: *- *([A-Z]+ *\d+|\w+))?'), '([A-Z]{{2}}) *(\d+)', '\1\2'),
             min(zeit) as first_seen,
             "FAHRZEUG" as original_code
         from {staging_table}
