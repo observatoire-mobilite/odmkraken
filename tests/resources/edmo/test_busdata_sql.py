@@ -33,7 +33,7 @@ def test_query_call(fake_sql):
     
     # within this call, we expect a whole bunch of arguments
     callargs = fake_sql.format.call_args_list[0].kwargs
-    for tbl in ('lines', 'stops', 'runs', 'pings', 'pings_from_halts', 'halts', 'data_files', 'data_file_timeframes'):
+    for tbl in ('lines', 'stops', 'runs', 'pings', 'pings_from_stops', 'halts', 'data_files', 'data_file_timeframes'):
         assert callargs[f'{tbl}_table'] == Identifier('schema', tbl)
     assert callargs['vehicles_table'] == Identifier('schema', 'vroum')
     assert callargs['test1'] == Literal(2)
@@ -50,7 +50,7 @@ def test_query_defaults(fake_sql):
     
     fake_sql.format.assert_called_once()
     callargs = fake_sql.format.call_args_list[0].kwargs
-    for tbl in ('lines', 'stops', 'runs', 'pings', 'pings_from_halts', 'halts', 'data_files', 'data_file_timeframes'):
+    for tbl in ('lines', 'stops', 'runs', 'pings', 'pings_from_stops', 'halts', 'data_files', 'data_file_timeframes'):
         assert callargs[f'{tbl}_table'] == Identifier('schema', tbl)
     assert callargs['test1'] == Literal('hoi')
     assert callargs['test2'] == Literal('guet')
