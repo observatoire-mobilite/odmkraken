@@ -57,7 +57,7 @@ jobs:
     - name: Run icts_data
       shell: bash -l {0}
       run: |
-        echo "{ops: {extract_from_csv: {config: {file: ${FILE}}}}, resources: {local_postgres: {config: {dsn: {env: 'DSN'}}}}" > icts_data_job.yaml
+        echo "{ops: {extract_from_csv: {config: {file: '${FILE}'}}}, resources: {local_postgres: {config: {dsn: {env: '${DSN}'}}}}}" > icts_data_job.yaml
         dagster job execute -m odmkraken -j icts_data -c icts_data_job.yaml
       env:
         DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
