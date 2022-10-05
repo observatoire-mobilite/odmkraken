@@ -104,5 +104,5 @@ def test_mapmatch_config(mocker):
     t1 = datetime(2022, 4, 13, 4)
     res = mapmatch_config(t0, t1)
     conf = res['ops']['load_vehicle_timeframes']['config']
-    assert conf['date_from'] == str(t0)
-    assert conf['date_to'] == str(t1)
+    assert conf['date_from'] == t0.strftime('%Y-%m-%d %H:%M')
+    assert conf['date_to'] == t1.strftime('%Y-%m-%d %H:%M')

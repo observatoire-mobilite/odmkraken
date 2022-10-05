@@ -22,6 +22,10 @@ class VehicleTimeFrame:
 
     __slots__ = ('id', 'vehicle_id', 'time_from', 'time_to')
 
+    def __post_init__(self):
+        if not isinstance(self.id, uuid.UUID):
+            self.id = uuid.UUID(self.id)
+
     def flat(self) -> typing.Tuple[int, datetime, datetime]:
         return (self.vehicle_id, self.time_from, self.time_to)
 
