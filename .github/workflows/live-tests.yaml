@@ -53,6 +53,7 @@ jobs:
         PGPORT: 5432
         PGUSER: postgres
         PGPASS: postgres
+        PYTHONPATH: ./src
     
     - name: Run icts_data
       shell: bash -l {0}
@@ -62,4 +63,4 @@ jobs:
       env:
         DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
         FILE: tests/testdata.csv.zip
-    
+        PYTHONPATH: ./src
