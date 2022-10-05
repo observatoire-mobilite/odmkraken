@@ -53,7 +53,7 @@ class EDMOVehData(EDMOData):
     def get_edgelist(self):
         """Retrieve the entire network as `nx`-style list of edges."""
         # TODO: remove schema hardcoding
-        return self.store.callproc('vehdata.get_edgelist')
+        return self.store.callproc('network.get_edgelist')
 
     def extract_halts(self, tf: VehicleTimeFrame):
         """Get all declared halts performed during `tf`."""

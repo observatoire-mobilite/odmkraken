@@ -14,7 +14,7 @@ def fake_pgc(mocker):
         (uuid.uuid4(), 0, datetime(2020, 1, 1, 4), datetime(2020, 1, 2, 4)),
         (uuid.uuid4(), 1, datetime(2020, 1, 1, 4), datetime(2020, 1, 2, 4)),
         (uuid.uuid4(), 2, datetime(2020, 1, 1, 4), datetime(2020, 1, 2, 4)),
-        (uuid.uuid4(), 0, datetime(2020, 1, 2, 4), datetime(2020, 1, 3, 4))
+        (uuid.uuid4(), 0, datetime(2020, 1, 2, 4), datetime(2020, 1, 3, 4)),
     ]
     fake_cur.__enter__ = mocker.Mock(return_value=fake_cur)
     fake_cur.__iter__.return_value = fake_data
@@ -28,7 +28,9 @@ def fake_pgc(mocker):
 
 
 def test_edmo_vehdata(fake_pgc):
-    ctx = dagster.build_init_resource_context(resources={'local_postgres': fake_pgc}, config={})
+    ctx = dagster.build_init_resource_context(
+        resources={'local_postgres': fake_pgc}, config={}
+    )
     data = edmo_vehdata(ctx)
     assert isinstance(data, EDMOData)
     assert isinstance(data, EDMOVehData)
@@ -41,38 +43,46 @@ def test_edmovehdata(fake_pgc):
 
 
 def test_shortest_path_engine(mocker):
-    fake_edmo = mocker.patch('odmkraken.resources.edmo.busdata.EDMOVehData', autospec=True)
+    fake_edmo = mocker.patch(
+        'odmkraken.resources.edmo.busdata.EDMOVehData', autospec=True
+    )
     fake_cur = mocker.MagicMock(spec=['__enter__', '__exit__'])
     fake_cur.__enter__.return_value = fake_cur
     fake_edmo.get_edgelist.return_value = fake_cur
-    fake_spe = mocker.patch('odmkraken.resources.edmo.busdata.NXPathFinderWithLocalCache', autospec=True)
-    ctx = dagster.build_init_resource_context(
-        resources={'edmo_vehdata': fake_edmo}
+    fake_spe = mocker.patch(
+        'odmkraken.resources.edmo.busdata.NXPathFinderWithLocalCache', autospec=True
     )
+    ctx = dagster.build_init_resource_context(resources={'edmo_vehdata': fake_edmo})
     spe = shortest_path_engine(ctx)
     fake_edmo.get_edgelist.assert_called_once()
     assert spe == fake_spe(fake_cur)
 
 
 def test_edmobusdata_get_timeframes_by_file(fake_pgc, mocker):
-    sql = mocker.patch('odmkraken.resources.edmo.busdata.sql.vehicle_timeframes_for_file', autospec=True)
+    sql = mocker.patch(
+        'odmkraken.resources.edmo.busdata.sql.vehicle_timeframes_for_file',
+        autospec=True,
+    )
     sql.return_value = 'hello'
-    
+
     data = EDMOVehData(fake_pgc)
     file_id = uuid.uuid4()
     tf = list(data.get_timeframes_by_file(file_id))
     fake_pgc.query.assert_called_once_with('hello', file_id)
     assert [t.id for t in tf] == [t[0] for t in fake_pgc._fake_data]
 
-    
+
 def test_edmobusdata_get_timeframes_on(fake_pgc, mocker):
-    sql = mocker.patch('odmkraken.resources.edmo.busdata.sql.vehicle_timeframes_for_period', autospec=True)
+    sql = mocker.patch(
+        'odmkraken.resources.edmo.busdata.sql.vehicle_timeframes_for_period',
+        autospec=True,
+    )
     sql.return_value = 'period'
 
     t = pendulum.now().at(hour=4)
     dt = pendulum.duration(days=2)
     data = EDMOVehData(fake_pgc)
-    
+
     tf = list(data.get_timeframes_on(t, t + dt))
     fake_pgc.query.assert_called_once_with('period', t, t.add(days=2))
     assert [t.id for t in tf] == [t[0] for t in fake_pgc._fake_data]
@@ -95,13 +105,15 @@ def test_edmobusdata_get_pings(fake_pgc, mocker):
 def test_edmobusdata_get_edgelist(fake_pgc):
     data = EDMOVehData(fake_pgc)
     data.get_edgelist()
-    fake_pgc.callproc.assert_called_once_with('vehdata.get_edgelist')
+    fake_pgc.callproc.assert_called_once_with('network.get_edgelist')
 
 
 def test_edmobusdata_extract_halts(fake_pgc, mocker):
-    sql = mocker.patch('odmkraken.resources.edmo.busdata.sql.extract_halts', autospec=True)
+    sql = mocker.patch(
+        'odmkraken.resources.edmo.busdata.sql.extract_halts', autospec=True
+    )
     sql.return_value = 'halts'
-    
+
     t1, t2 = datetime(2022, 1, 1, 4), datetime(2022, 1, 2, 4)
     tf = VehicleTimeFrame(uuid.uuid4(), 1, t1, t2)
     data = EDMOVehData(fake_pgc)
@@ -122,22 +134,28 @@ def test_check_file_already_imported(fake_pgc):
     checksum = b'moin'
     data = EDMOVehData(fake_pgc)
     assert data.check_file_already_imported(checksum)
-    
+
 
 def test_import_csv_file(fake_pgc, mocker):
     # TODO: incomplete, but for now just useful to check the method is executable
     sql = mocker.patch('odmkraken.resources.edmo.busdata.sql', autospec=True)
     sql.create_staging_table = mocker.Mock(return_value='adjust_date')
     sql.len_staging_table = mocker.Mock(return_value='len_st')
-    
+
     fake_handle = mocker.Mock()
     checksum = b'checkthesum'
-    
+
     data = EDMOVehData(fake_pgc)
     data.import_csv_file(fake_handle, sep='?', table='moin')
 
     fake_pgc.run.assert_called_once_with('adjust_date')
-    fake_pgc.copy_from.assert_called_with(fake_handle, ('vehdata', 'moin'), separator='?')
+    fake_pgc.copy_from.assert_called_with(
+        fake_handle, ('vehdata', 'moin'), separator='?'
+    )
     fake_pgc.fetchone.assert_called_once_with('len_st')
-    sql.create_staging_table.assert_called_once_with(staging_table='moin', schema='vehdata')
-    sql.len_staging_table.assert_called_once_with(staging_table='moin', schema='vehdata')
+    sql.create_staging_table.assert_called_once_with(
+        staging_table='moin', schema='vehdata'
+    )
+    sql.len_staging_table.assert_called_once_with(
+        staging_table='moin', schema='vehdata'
+    )
