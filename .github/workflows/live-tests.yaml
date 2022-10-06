@@ -20,7 +20,7 @@ jobs:
     
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.10"]  # removed python 3.8 and 3.9 to save on GitHub action credits
       max-parallel: 5
 
     steps:
@@ -63,4 +63,13 @@ jobs:
       env:
         DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
         FILE: tests/testdata.csv.zip
+        PYTHONPATH: ./src
+
+    - name: Run mapmatch_bus_data
+      shell: bash -l {0}
+      run: |
+        echo "{ops: {load_vehicle_timeframes: {config: {date_from: '2022-09-08 04:00', date_to: '2022-09-09 04:00'}}}, resources: {local_postgres: {config: {dsn: {env: 'DSN'}}}}}" > mapmatch_bus_data.yaml
+        dagster job execute -m odmkraken -j mapmatch_bus_data -c mapmatch_bus_data.yaml
+      env:
+        DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
         PYTHONPATH: ./src
