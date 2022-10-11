@@ -21,7 +21,7 @@ def fake_pgc(mocker):
     fake_cur.rowcount = len(fake_data)
     fake_pgc.cursor = mocker.Mock(return_value=fake_cur)
     fake_pgc.query = mocker.Mock(return_value=fake_cur)
-    fake_pgc.callproc = mocker.Mock(return_value=fake_cur)
+    fake_pgc.callproc = mocker.MagicMock(return_value=fake_cur)
     fake_pgc.fetchone = mocker.Mock(return_value=[100])
     fake_pgc._fake_data = fake_data
     return fake_pgc
@@ -92,14 +92,18 @@ def test_edmobusdata_get_pings(fake_pgc, mocker):
     data = EDMOVehData(fake_pgc)
     t1, t2 = datetime(2022, 1, 1, 4), datetime(2022, 1, 2, 4)
     tf = VehicleTimeFrame(uuid.uuid4(), 1, t1, t2)
-    pings = list(data.get_pings(tf))
-    fake_pgc.callproc.called_once_with('vehdata.get_pings', 1, t1, t2)
+    with data.get_pings(tf) as cur:
+        fake_pgc.callproc.called_once_with('vehdata.get_pings', 1, t1, t2)
 
     fake_cur = mocker.Mock()
+    fake_cur.__enter__ = mocker.MagicMock(return_value=fake_cur)
+    fake_cur.__exit__ = mocker.MagicMock()
     fake_cur.rowcount = 1
     fake_pgc.callproc = mocker.Mock(return_value=fake_cur)
     with pytest.raises(RuntimeError):
-        list(data.get_pings(tf))
+        with data.get_pings(tf) as cur:
+            pass
+    fake_cur.__exit__.assert_called_once()
 
 
 def test_edmobusdata_get_edgelist(fake_pgc):
