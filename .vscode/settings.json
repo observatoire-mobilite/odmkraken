@@ -3,9 +3,7 @@
         "tests"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.nosetestsEnabled": false,
     "python.testing.pytestEnabled": true,
-    "python.pythonPath": "C:\\Users\\uuw336\\mambaforge\\envs\\odm-devel\\python.exe",
     "python.linting.mypyEnabled": true,
     "python.linting.enabled": true
 }
