@@ -1,0 +1,48 @@
+"""Load network description."""
+import typing
+import dagster
+
+
+@dagster.op(
+    required_resource_keys={'local_postgres'},
+    config_schema={
+        'network_schema': dagster.StringSource,
+        'network_node_table': dagster.StringSource,
+        'network_node_file': dagster.StringSource,
+    },
+)
+def load_nodes(context: dagster.OpExecutionContext):
+    """Load nodes file."""
+    context.log.info('reading nodes file ...')
+    table = (
+        context.op_config['network_schema'],
+        context.op_config['network_node_table'],
+    )
+    with open(context.op_config['network_node_file'], 'r', encoding='utf8') as buffer:
+        context.resources.local_postgres.copy_from(buffer, table)
+
+
+@dagster.op(
+    required_resource_keys={'local_postgres'},
+    config_schema={
+        'network_schema': dagster.StringSource,
+        'network_edge_table': dagster.StringSource,
+        'network_edge_file': dagster.StringSource,
+    },
+)
+def load_edges(context: dagster.OpExecutionContext):
+    """Load edges file."""
+    context.log.info('reading edges file ...')
+    table = (
+        context.op_config['network_schema'],
+        context.op_config['network_edge_table'],
+    )
+    with open(context.op_config['network_edge_file'], 'r', encoding='utf8') as buffer:
+        context.resources.local_postgres.copy_from(buffer, table)
+
+
+@dagster.graph()
+def load_network():
+    """Load complete network model."""
+    yield load_nodes()
+    yield load_network()
