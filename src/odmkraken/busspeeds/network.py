@@ -2,6 +2,7 @@
 import typing
 import zipfile
 import dagster
+import pathlib
 
 
 @dagster.op(
