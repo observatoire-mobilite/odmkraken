@@ -15,7 +15,7 @@ def load_nodes(context: dagster.OpExecutionContext):
     """Load nodes file."""
     context.log.info('reading nodes file ...')
     table = ('network', 'road_nodes')
-    with open_file(context.op_config['network_node_file'], 'r', encoding='utf8') as buffer:
+    with open_file(context.op_config['network_node_file'], 'r') as buffer:
         context.resources.local_postgres.copy_from(buffer, table)
 
 
@@ -29,7 +29,7 @@ def load_edges(context: dagster.OpExecutionContext):
     """Load edges file."""
     context.log.info('reading edges file ...')
     table = ('network', 'road_edges')
-    with open_file(context.op_config['network_edge_file'], 'r', encoding='utf8') as buffer:
+    with open_file(context.op_config['network_edge_file'], 'r') as buffer:
         context.resources.local_postgres.copy_from(buffer, table)
 
 
