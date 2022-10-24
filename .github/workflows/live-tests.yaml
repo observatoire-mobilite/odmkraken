@@ -54,6 +54,17 @@ jobs:
         PGUSER: postgres
         PGPASS: postgres
         PYTHONPATH: ./src
+        
+    - name: Import road map
+      shell: bash -l {0}
+      run: |
+        echo "{ops: {load_edges: {config: {network_edge_file: '${EDGES_FILE}'}}, load_nodes: {config: {network_node_file: '${NODES_FILE}'}}}, resources: {local_postgres: {config: {dsn: {env: 'DSN' }}}}}" > job.yaml
+        dagster job execute -m odmkraken -j load_network -c job.yaml    
+      env:
+        DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
+        EDGES_FILE: tests/network.edges.csv.zip
+        NODES_FILE: tests/network.nodes.csv.zip
+        PYTHONPATH: ./src
     
     - name: Run icts_data
       shell: bash -l {0}
