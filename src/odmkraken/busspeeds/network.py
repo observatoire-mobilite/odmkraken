@@ -34,5 +34,5 @@ def load_edges(context: dagster.OpExecutionContext):
 @dagster.graph()
 def load_network():
     """Load complete network model."""
-    yield load_nodes()
-    yield load_network()
+    load_nodes()
+    load_network()
