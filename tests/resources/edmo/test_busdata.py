@@ -84,7 +84,7 @@ def test_edmobusdata_get_timeframes_on(fake_pgc, mocker):
     data = EDMOVehData(fake_pgc)
 
     tf = list(data.get_timeframes_on(t, t + dt))
-    fake_pgc.query.assert_called_once_with('period', t, t.add(days=2))
+    fake_pgc.query.assert_called_once_with('period', t, t + dt) 
     assert [t.id for t in tf] == [t[0] for t in fake_pgc._fake_data]
 
 
