@@ -1,6 +1,6 @@
 import dagster
 import typing
-from datetime import datetime
+from datetime import datetime, timedelta
 from mapmatcher import Itinerary, reconstruct_optimal_path, ProjectLinear, Scorer, candidate_solution
 from odmkraken.resources.edmo.busdata import VehicleTimeFrame
 
@@ -14,7 +14,7 @@ def load_vehicle_timeframes(context: dagster.OpExecutionContext) -> typing.Itera
 
 
 @dagster.op(required_resource_keys={'edmo_vehdata', 'shortest_path_engine'})
-def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> typing.List[typing.Tuple[int, int, int, float, float]]:
+def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> typing.List[typing.Tuple[int, int, int, datetime, timedelta]]:
 
     # lazy nearby road detection
     def nearby_roads(t: datetime, x: float, y: float):
