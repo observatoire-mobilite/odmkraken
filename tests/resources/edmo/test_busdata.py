@@ -121,8 +121,8 @@ def test_edmobusdata_extract_halts(fake_pgc, mocker):
     t1, t2 = datetime(2022, 1, 1, 4), datetime(2022, 1, 2, 4)
     tf = VehicleTimeFrame(uuid.uuid4(), 1, t1, t2)
     data = EDMOVehData(fake_pgc)
-    list(data.extract_halts(tf))
-    fake_pgc.query.assert_called_once_with('halts', tf.vehicle_id, t1, t2)
+    data.extract_halts(tf)
+    fake_pgc.run.assert_called_once_with('halts', tf.vehicle_id, t1, t2)
 
 
 def test_edmobusdata_get_nearby_roads(fake_pgc):
