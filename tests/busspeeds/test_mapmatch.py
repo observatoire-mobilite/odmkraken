@@ -2,7 +2,7 @@ import pytest
 from odmkraken.busspeeds.mapmatch import *
 import dagster
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 @pytest.fixture
@@ -64,7 +64,10 @@ def test_most_likely_path(fake_edmo, fake_tf, mocker):
     
     fake_proj = mocker.patch('odmkraken.busspeeds.mapmatch.ProjectLinear', autospec=True)
     fake_proj_inst = fake_proj.return_value
-    fake_proj_inst.project.return_value = [(1, 2, 0.0, 4.1), (2, 3, 4.1, 2.)]
+    t0 = datetime.now()
+    t1 = t0 + timedelta(seconds=4.1)
+    t2 = t1 + timedelta(seconds=2.0)
+    fake_proj_inst.project.return_value = [(1, 2, t0, t1- t0), (2, 3, t1, t2 - t1)]
 
     fake_spe = mocker.patch('mapmatcher.pathfinder.nx.NXPathFinderWithLocalCache', autospec=True)
     res = {'edmo_vehdata': fake_edmo,
@@ -90,7 +93,7 @@ def test_most_likely_path(fake_edmo, fake_tf, mocker):
     fake_proj.assert_called_once_with()
     fake_proj_inst.project.assert_called_once_with(fake_path)
     #   4. its return gets expanded to a list of tuples
-    assert res == [(4321, 1, 2, 0.0, 4.1), (4321, 2, 3, 4.1, 2.)]
+    assert res == [(4321, 1, 2, t0, t1 - t0), (4321, 2, 3, t1, t2 - t1)]
 
 
 def test_extract_halts(fake_edmo, fake_tf):
