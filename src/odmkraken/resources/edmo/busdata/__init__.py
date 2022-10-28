@@ -66,10 +66,7 @@ class EDMOVehData(EDMOData):
 
     def extract_halts(self, tf: VehicleTimeFrame):
         """Get all declared halts performed during `tf`."""
-        with self.store.query(
-            sql.extract_halts(schema=self.vehdata_schema), *tf.flat()
-        ) as cur:
-            yield from cur
+        self.store.run(sql.extract_halts(schema=self.vehdata_schema), *tf.flat())
 
     def get_nearby_roads(self, t: datetime, x: float, y: float):
         """Get roads physically clos to given point at given time"""
