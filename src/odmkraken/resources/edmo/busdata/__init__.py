@@ -68,9 +68,9 @@ class EDMOVehData(EDMOData):
         """Get all declared halts performed during `tf`."""
         self.store.run(sql.extract_halts(schema=self.vehdata_schema), *tf.flat())
 
-    def get_nearby_roads(self, t: datetime, x: float, y: float):
+    def get_nearby_roads(self, t: datetime, x: float, y: float, radius: float=90):
         """Get roads physically clos to given point at given time"""
-        with self.store.callproc('network.nearby_roads', x, y) as cur:
+        with self.store.callproc('network.nearby_roads', x, y, float(radius)) as cur:
             yield from cur
 
     def check_file_already_imported(self, checksum: bytes):

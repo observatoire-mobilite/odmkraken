@@ -3,6 +3,7 @@ import typing
 from datetime import datetime, timedelta
 from mapmatcher import Itinerary, reconstruct_optimal_path, ProjectLinear, Scorer, candidate_solution
 from odmkraken.resources.edmo.busdata import VehicleTimeFrame
+from functools import partial
 
 
 @dagster.op(out=dagster.DynamicOut(), required_resource_keys={'edmo_vehdata'},
@@ -13,16 +14,22 @@ def load_vehicle_timeframes(context: dagster.OpExecutionContext) -> typing.Itera
         yield dagster.DynamicOutput(tf, mapping_key=str(tf.id.hex))
 
 
+def get_nearby_roads(t: datetime, x: float, y: float, context: dagster.OpExecutionContext):
+    for r in (100, 200, 500, 1000):
+        roads = context.resources.edmo_vehdata.get_nearby_roads(t, x, y, radius=r)
+        roads = [candidate_solution(*r, t) for r in roads]
+        if roads:
+            break
+    if (r != 100):
+        context.log.warn('Increased search radius to {r:.1f}m around (x={x:.1f}, y={y:.1f})')
+    return roads
+
+
 @dagster.op(required_resource_keys={'edmo_vehdata', 'shortest_path_engine'})
 def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> typing.List[typing.Tuple[int, int, int, datetime, timedelta]]:
 
-    # lazy nearby road detection
-    def nearby_roads(t: datetime, x: float, y: float):
-        roads = context.resources.edmo_vehdata.get_nearby_roads(t, x, y)
-        roads = [candidate_solution(*r, t) for r in roads]
-        return roads
-
-    # set detection parameters
+    # just some aliases
+    nearby_roads = partial(get_nearby_roads, context=context)  # allows to externalize code for testing
     scorer = Scorer()
     spe = context.resources.shortest_path_engine
 

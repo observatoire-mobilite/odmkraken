@@ -129,9 +129,9 @@ def test_edmobusdata_get_nearby_roads(fake_pgc):
     t = datetime.now()
     x, y = 100.4, 100.5
     data = EDMOVehData(fake_pgc)
-    pings = list(data.get_nearby_roads(t, x, y))
+    pings = list(data.get_nearby_roads(t, x, y, radius=1001))
     assert len(pings) == 4
-    fake_pgc.callproc.assert_called_once_with('network.nearby_roads', x, y)
+    fake_pgc.callproc.assert_called_once_with('network.nearby_roads', x, y, 1001.)
 
 
 def test_check_file_already_imported(fake_pgc):
