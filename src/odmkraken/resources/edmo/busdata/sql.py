@@ -10,7 +10,7 @@ class Query:
         self._defaults = kwargs
 
     def defaults(self, schema: str='vehdata') -> typing.Iterator[typing.Tuple[str, typing.Union[str, Identifier, Literal]]]:
-        for tbl in ('vehicles', 'lines', 'stops', 'runs', 'pings', 'pings_from_stops', 'halts', 'data_files', 'data_file_timeframes'):
+        for tbl in ('vehicles', 'lines', 'stops', 'runs', 'pings', 'pings_from_stops', 'halts', 'data_files', 'data_file_timeframes', 'results'):
             yield (f'{tbl}_table', Identifier(schema, tbl))
         for obj in ('event_code_to_event_type', 'get_vehicle_halts'):
             yield obj, Identifier(schema, obj)
@@ -252,3 +252,12 @@ insert into {halts_table}
 select * from {get_vehicle_halts}(%s, %s, %s)
 ''')
 
+
+add_results = Query(r'''
+insert into {results_table} (vehicle_id, from_node, to_node, t_enter, dt_travers) values (%s, %s, %s, %s, %s);
+''')
+
+
+get_results = Query(r'''
+select vehicle_id, from_node, to_node, t_enter, dt_travers from {results_table};
+''')
