@@ -6,6 +6,10 @@ from odmkraken.resources.edmo.busdata import VehicleTimeFrame
 from functools import partial
 
 
+# fields: vehicle_id, from_node, to_node, t_enter, dt_travers
+RESULT_LIST = typing.List[typing.Tuple[int, int, int, datetime, timedelta]]
+
+
 @dagster.op(out=dagster.DynamicOut(), required_resource_keys={'edmo_vehdata'},
             config_schema={'date_from': str, 'date_to': str})
 def load_vehicle_timeframes(context: dagster.OpExecutionContext) -> typing.Iterator[dagster.DynamicOutput[VehicleTimeFrame]]:
@@ -25,8 +29,11 @@ def get_nearby_roads(t: datetime, x: float, y: float, context: dagster.OpExecuti
     return roads
 
 
-@dagster.op(required_resource_keys={'edmo_vehdata', 'shortest_path_engine'})
-def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> typing.List[typing.Tuple[int, int, int, datetime, timedelta]]:
+@dagster.op(
+    required_resource_keys={'edmo_vehdata', 'shortest_path_engine'},
+    out=dagster.Out(io_manager_key='edmo_mapmatching_results')
+)
+def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> RESULT_LIST:
 
     # just some aliases
     nearby_roads = partial(get_nearby_roads, context=context)  # allows to externalize code for testing
