@@ -53,6 +53,38 @@ def fake_tf(mocker):
     return tf
 
 
+def test_get_nearby_roads(fake_edmo, mocker):
+    fake_spe = mocker.patch('mapmatcher.pathfinder.nx.NXPathFinderWithLocalCache', autospec=True)
+    res = {'edmo_vehdata': fake_edmo,
+           'shortest_path_engine': fake_spe}
+    ctx = dagster.build_op_context(resources=res)
+    t = datetime(2020, 1, 1, 4)
+    fix = (1, 2, 3.4, 0.1, 0, 1.)
+    
+    # normal operation
+    fake_edmo.get_nearby_roads = mocker.MagicMock(side_effect=[(fix, )])
+    res = get_nearby_roads(t, 17., 18., context=ctx)
+    fake_edmo.get_nearby_roads.called_once_with(t, 17., 18., 100.)
+    assert len(res) == 1
+    assert res[0].sequence.trace == (1, 2)
+
+    # hit only after increasing radius twice
+    fake_edmo.get_nearby_roads = mocker.MagicMock(side_effect=[[], [], (fix, )])
+    res = get_nearby_roads(t, 17., 18., context=ctx)
+    fake_edmo.get_nearby_roads.called_with(t, 17., 18., 100.)
+    fake_edmo.get_nearby_roads.called_with(t, 17., 18., 200.)
+    fake_edmo.get_nearby_roads.called_with(t, 17., 18., 500.)
+    assert len(res) == 1
+    assert res[0].sequence.trace == (1, 2)
+
+    # no hit ever    
+    fake_edmo.get_nearby_roads = mocker.MagicMock(return_value=[])
+    res = get_nearby_roads(t, 17., 18., context=ctx)
+    for r in (100, 200, 500, 1000):
+        fake_edmo.get_nearby_roads.called_with(t, 17., 18., float(r))
+    assert len(res) == 0
+
+
 def test_most_likely_path(fake_edmo, fake_tf, mocker):
     # faking components of the mapmatcher library
     fake_path = mocker.Mock(name='fake_path')
