@@ -40,6 +40,7 @@ jobs:
         echo "::set-output name=buildstr::${BLDSTR}"
         echo "::set-output name=is_prerelease::${PREREL}"
         echo "::set-output name=buildnbr::1"
+        echo "__version__ = ${RELEASE}" > ./src/odmkraken/version.py
       
     - name: release
       uses: actions/create-release@v1
