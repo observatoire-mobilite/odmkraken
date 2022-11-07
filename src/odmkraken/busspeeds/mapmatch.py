@@ -24,8 +24,8 @@ def get_nearby_roads(t: datetime, x: float, y: float, context: dagster.OpExecuti
         roads = [candidate_solution(*r, t) for r in roads]
         if roads:
             break
-    if (r != 100):
-        context.log.warn('Increased search radius to {r:.1f}m around (x={x:.1f}, y={y:.1f})')
+    if (r >= 500):
+        context.log.warn(f'Increased search radius to {r:.1f}m around (x={x:.1f}, y={y:.1f})')
     return roads
 
 
