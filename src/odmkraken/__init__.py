@@ -1,2 +1,5 @@
 from .busspeeds.repo import busspeeds as repo_busspeeds
-from ._version import __version__
+try:
+  from ._version import __version__
+except ImportError:
+  __version__ = '(unknown)'  # simplifies handling of tests
