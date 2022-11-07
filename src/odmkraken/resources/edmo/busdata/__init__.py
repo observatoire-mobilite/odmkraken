@@ -91,7 +91,7 @@ class EDMOVehData(EDMOData):
     def adjust_date(self, date: str = 'YYYY-MM-DD', table: str = 'raw_data'):
         self.store.run(sql.adjust_date(date_format=date, staging_table=table))
 
-    def transform_data(self, file: pathlib.Path, checksum: bytes, table='raw_data'):
+    def transform_data(self, file: pathlib.Path, checksum: bytes, table='raw_data') -> uuid.UUID:
         with self.store.cursor() as cur:
             print('extracting vehicles ...')
             cur.execute(
@@ -137,6 +137,8 @@ class EDMOVehData(EDMOData):
             cur.execute(
                 sql.drop_staging_table(staging_table=table, schema=self.vehdata_schema)
             )
+
+        return file_id
 
 
 @dagster.resource(required_resource_keys={'local_postgres'})
