@@ -35,11 +35,12 @@ jobs:
         BLDSTR='py_1'; [[ $RELEASE =~ '+' ]] && BLDSTR=${RELEASE#*+}
         PREREL=false; [[ $VERSION =~ (a|b|rc)[0-9]+$ ]] && PREREL=true
         
-        echo "::set-output name=release::${RELEASE}"
-        echo "::set-output name=version::${VERSION}"
-        echo "::set-output name=buildstr::${BLDSTR}"
-        echo "::set-output name=is_prerelease::${PREREL}"
-        echo "::set-output name=buildnbr::1"
+        echo "release=${RELEASE}" >> $GITHUB_OUTPUT
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "buildstr=${BLDSTR}" >> $GITHUB_OUTPUT
+        echo "is_prerelease=${PREREL}" >> $GITHUB_OUTPUT
+        echo "buildnbr=1" >> $GITHUB_OUTPUT
+        
         echo "__version__ = '${RELEASE}'" > ./src/odmkraken/_version.py
       
     - name: release
