@@ -14,7 +14,7 @@ RESULT_LIST = typing.List[typing.Tuple[int, int, int, datetime, timedelta]]
             config_schema={'file_id': str})
 def load_vehicle_timeframes(context: dagster.OpExecutionContext) -> typing.Iterator[dagster.DynamicOutput[VehicleTimeFrame]]:
     """Load all timeframes detected within a given file."""
-    file = uuid.UUID(hex=context.op_config['file_id'])
+    file = uuid.UUID(context.op_config['file_id'])
     for tf in context.resources.edmo_vehdata.get_timeframes_by_file(file):
         yield dagster.DynamicOutput(tf, mapping_key=str(tf.id.hex))
 

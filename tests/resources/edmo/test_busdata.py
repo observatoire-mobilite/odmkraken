@@ -68,7 +68,7 @@ def test_edmobusdata_get_timeframes_by_file(fake_pgc, mocker):
     data = EDMOVehData(fake_pgc)
     file_id = uuid.uuid4()
     tf = list(data.get_timeframes_by_file(file_id))
-    fake_pgc.query.assert_called_once_with('hello', file_id)
+    fake_pgc.query.assert_called_once_with('hello', str(file_id))
     assert [t.id for t in tf] == [t[0] for t in fake_pgc._fake_data]
 
 

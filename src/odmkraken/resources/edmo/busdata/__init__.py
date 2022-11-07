@@ -37,7 +37,7 @@ class EDMOVehData(EDMOData):
     ) -> typing.List[VehicleTimeFrame]:
         """Return all vehicle timeframes contained in a given file."""
         with self.store.query(
-            sql.vehicle_timeframes_for_file(schema=self.vehdata_schema), file_id
+            sql.vehicle_timeframes_for_file(schema=self.vehdata_schema), str(file_id)
         ) as cur:
             return [VehicleTimeFrame(*row) for row in cur]
 
