@@ -89,7 +89,23 @@ class PostgresConnector:
             cur.copy_expert(query, handle)
 
     def execute_batch(self, query: str, data: typing.List[typing.Tuple[typing.Any, ...]], cursor=None):
-        cursor = self.connection.cursor() if cursor is None else cursor
+        """Execute `query` repeatedly for the list of provided data.
+        
+        Allows to repeat a query, most usefully an `INSERT` query repeatedly for the
+        provided list `data`. `data` represents a table, as each entry is a tuple whose
+        values correspond to the column values.
+        
+        Arguments:
+            query: the query (template - use `%s` placeholders) to execute
+            data: the list of tuples to apply `query` against
+            cursor: if specified, use the provided cursor instead of spawning a new
+                one using `self.cursor`. Note that it is then up to the user to
+                handle any errors, close the cursor when done and commit (if required)
+                or rollback.
+        """
+        if cursor is None:
+            with self.cursor() as cur:
+                return execute_batch(cur, query, data)
         execute_batch(cursor, query, data)
 
 
