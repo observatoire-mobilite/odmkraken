@@ -12,8 +12,12 @@ data_file = dagster.SourceAsset(
     partitions_def=dagster.DailyPartitionsDefinition(start_date="2020-01-01")
 )
 
-@dagster.asset(
+@dagster.multi_asset(
     ins={'dta': dagster.AssetIn('icts_data_dump', input_manager_key='pandas_csv_io_manager')},
+    outs={
+        'pings': dagster.AssetOut(dagster_type=pd.DataFrame),
+        'duplicate_pings': dagster.AssetOut(dagster_type=pd.DataFrame, is_required=False)
+    },
     partitions_def=dagster.DailyPartitionsDefinition(start_date="2020-01-01")
 )
 def normalized_ping_record(context: dagster.OpExecutionContext, dta: pd.DataFrame) -> pd.DataFrame:
@@ -34,15 +38,13 @@ def normalized_ping_record(context: dagster.OpExecutionContext, dta: pd.DataFram
         'AUSSTEIGER': 'count_people_disembarking'
     }
     dta = dta.rename(columns=fields)
-
+    
     # extract date
-    context.log.debug('adjusting date format ...')
     datum = pd.to_datetime(dta.pop('date'))
     for field in ('time', 'expected_time'):
         dta[field] = datum + pd.to_timedelta(dta[field])
 
     # reduce to categoricals
-    context.log.debug('adjusting column types ...')
     for field in ('type', 'vehicle', 'line', 'sortie', 'run', 'stop'):
         dta[field] = dta[field].astype('category')
 
@@ -54,7 +56,44 @@ def normalized_ping_record(context: dagster.OpExecutionContext, dta: pd.DataFram
     for field  in ('count_people_boarding', 'count_people_disembarking'):
         dta[field] = dta[field].astype('Int16')
 
-    return dta
+    # sort
+    dta = dta.sort_values(['vehicle', 'time'])
+
+    # retaining a record of duplicates
+    d = dta.groupby(['vehicle', 'time'], observed=True)[['type']].count().query('type > 1')
+    duplicates = dta.set_index(['vehicle', 'time']).loc[d.index]
+    del d
+    if len(duplicates) > 0:
+        context.log.warn(f'Found {len(duplicates)} duplicate records; a record of all concerned events will be kept.')
+        yield dagster.Output(
+            value=duplicates, output_name='duplicate_pings', 
+            metadata={
+                'number of duplicate events':  len(duplicates),
+                'total number of events': len(dta),
+                'vehicles with duplicates': len(duplicates.index.get_level_values(0).unique())
+        })
+
+    # just drop, keeping the last one in the list (randomly)
+    dta.drop_duplicates(['vehicle', 'time'], keep='last', inplace=True)
+    
+    # extract run-id for every vehicle
+    # kind-of-equivalent to using sequences in SQL
+    def seq(r):
+        d = r[['line', 'sortie', 'run']]
+        d = d.ne(d.shift()).any(axis=1).cumsum()
+        return d
+    dta['run_id'] = dta.groupby('vehicle', group_keys=False, observed=True).apply(seq)
+    dta['run_id'] = dta['run_id'].astype('category')
+    yield dagster.Output(
+        value=dta, output_name='pings', 
+        metadata={
+            'number of events': len(dta),
+            'earliest recorded event': str(dta['time'].min()),
+            'last recorded event': str(dta['time'].max()),
+            'had duplicate events': 'yes' if len(duplicates) > 0 else 'no',
+            'number of vehicles': len(dta['vehicle'].unique()),
+            'passengers counted (boarding)': int(dta['count_people_boarding'].sum())
+    })
 
 
 class PandasCSVIOManager(dagster.IOManager):
