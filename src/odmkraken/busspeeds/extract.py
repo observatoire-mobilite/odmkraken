@@ -1,218 +1,228 @@
 """Load INIT CSV files."""
 import typing
-import pathlib
-import zipfile
-import re
-import hashlib
-import math
-import uuid
-from datetime import datetime
 import dagster
-from dataclasses import dataclass
-
-TBL = typing.List[typing.Tuple[int, datetime, datetime]]
-CSV_REQUIRED_FIELDS = {"TYP", "DATUM", "SOLLZEIT", "ZEIT", "FAHRZEUG", "LINIE", "UMLAUF", "FAHRT", "HALT", "LATITUDE", "LONGITUDE", "EINSTEIGER", "AUSSTEIGER"}
-CSV_KNOWN_SEPARATORS = [',', ';', '\t']
-
-class FileAlreadyImportedError(Exception):
-
-    def __init__(self, file: pathlib.Path, checksum: typing.Optional[bytes]=None):
-        self.file = file
-        self.checksum = checksum
-        msg = f'File with identical checksum as `{file}` was already successfully imported'
-        super().__init__(msg)
+import pandas as pd
 
 
-@dataclass
-class NewData:
-    file: pathlib.Path
-    checksum: bytes
-    sep: str
-    date: str
-    lines: typing.Optional[int] = None
-    table: typing.Optional[str] = None
+@dagster.multi_asset(
+    ins={'dta': dagster.AssetIn('icts_data_dump', input_manager_key='pandas_csv_io_manager')},
+    outs={
+        'runs': dagster.AssetOut(
+            dagster_type=pd.DataFrame,
+            io_manager_key='pandas_postgres_io_manager'
+        ), 'pings': dagster.AssetOut(
+            dagster_type=pd.DataFrame,
+            io_manager_key='pandas_postgres_io_manager'
+        ), 'pings_from_stops': dagster.AssetOut(
+            dagster_type=pd.DataFrame,
+            io_manager_key='pandas_postgres_io_manager'
+        ), 'duplicate_pings': dagster.AssetOut(
+            dagster_type=pd.DataFrame, is_required=False,
+            io_manager_key='pandas_csv_io_manager'
+        )
+    },
+    partitions_def=dagster.DailyPartitionsDefinition(start_date="2020-01-01")
+)
+def normalized_ping_record(
+    context: dagster.OpExecutionContext,
+    dta: pd.DataFrame
+) -> typing.Iterator[dagster.Output]:
+    """Normalize ICTS input data."""
+    # adjust raw format to something meaningful
+    dta = adjust_format(dta)
 
-    def __post_init__(self):
-        if self.table is None:
-            self.table = '_import_' + str(uuid.uuid4())[:8]
+    # report any duplicate records
+    duplicates = find_duplicates(dta)
+    if len(duplicates) > 0:
+        context.log.warn(f'Found {len(duplicates)} duplicate records; '
+                         'a record of all concerned events will be kept.')
+        yield dagster.Output(
+            value=duplicates, output_name='duplicate_pings', 
+            metadata={
+                'number of duplicate events':  len(duplicates),
+                'total number of events': len(dta),
+                'vehicles with duplicates': len(duplicates.index.get_level_values(0).unique())
+        })
+
+    # just drop duplicates
+    dta.drop_duplicates(['vehicle', 'time'], keep='last', inplace=True)
+
+    # export table of location pings
+    pings = dta.query('type==-1')[['vehicle', 'time', 'longitude', 'latitude']]
+    yield dagster.Output(
+        value=pings,
+        output_name='pings',
+        metadata={
+            'number of records': len(pings),
+            'earliest record': str(pings['time'].min()),
+            'latest record': str(pings['time'].max()),
+            'number of vehicles': len(pings.vehicle.unique())
+        }
+    )
+
+    # export table of pings at stops
+    fields = ['vehicle', 'time', 'type', 'longitude', 'latitude',
+              'stop', 'expected_time', 'count_people_boarding',
+              'count_people_disembarking']
+    pings_from_stops = dta.query('type!=-1')[fields]
+    pings_from_stops['type'].replace({
+        0: 'geplante Haltestelle + Fahrplanpunkt',
+        1: 'Bedarfshaltestelle (geplant)',
+        2: 'ungeplante Haltestelle + Tür offen',
+        3: 'Störungspunkt',
+        4: 'Durchfahrt ohne Fahrgastaufnahme',
+        5: 'Haltestelle + kein Fahrplanpunkt',
+        6: 'Durchfahrt ohne Fahrgastaufnahme oder Fahrplanpunkt'
+    }, inplace=True)
+    yield dagster.Output(
+        value=pings_from_stops,
+        output_name='pings_from_stops',
+        metadata={
+            'number of records': len(pings_from_stops),
+            'earliest record': str(pings_from_stops['time'].min()),
+            'latest record': str(pings_from_stops['time'].max()),
+            'number of vehicles': len(pings_from_stops.vehicle.unique())
+        }
+    )
+
+    # export mission meta data
+    runs = runs_table(dta)
+    yield dagster.Output(
+        value=runs,
+        output_name='runs',
+        metadata={
+            'number or runs': len(runs),
+            'earliest record': str(runs['time_start'].min()),
+            'latest record': str(runs['time_end'].max()),
+            'number of vehicles': len(runs.vehicle.unique())
+        }
+    )
 
 
-@dagster.op(required_resource_keys={'edmo_vehdata'}, config_schema={'file': str})
-def extract_from_csv(context: dagster.OpExecutionContext) -> NewData:
-    """Import vehicle data from a zipped CSV data-file.
+def adjust_format(dta: pd.DataFrame):
+    """Convert data read from CSV to something meaningful.
 
-    The task copies over all of the raw data onto a temporary
-    table on the database server.
+    The provided CSV files have annoying formatting issues, primarily due to
+    the usage of European number and date formats. That is why inputs in `dta`
+    are mostly raw `str` that are then interpreted by this function. It also
+    convertes repetitive columns, such as those identifying vehicles, to
+    `category` for improved memory efficiency.
 
-    Note that if any exception occurs at any stage, the entire process
-    is rolled back, ensuring the integrity of the existing data.
-    Also note that one of the actions triggering such a rollback is
-    re-importing already imported data. 
+    Arguments:
+        dta: the input data read as read from CSV
     """
-    file = pathlib.Path(context.op_config['file'])
-    n_bytes, handle = open_file(file)
-    if n_bytes == 0:
-        context.log.warn(f'file is either empty or not a zip-file.')
-    else:
-        context.log.debug(f'file size: {human_readable_bytes(n_bytes)}')
-    format = infer_format(handle)
-    msg = ', '.join(f'{k}=`{v}`' for k, v in format.items())
-    context.log.debug(f'inferred format spec: {msg}')
-    checksum = compute_checksum(handle)
-    context.log.debug(f'checksum: {checksum}')
-    nd = NewData(file, checksum, **format)
+    # rename fields to system names
+    fields = {
+        'TYP': 'type',
+        'DATUM': 'date',
+        'SOLLZEIT': 'expected_time',
+        'ZEIT': 'time',
+        'FAHRZEUG': 'vehicle',
+        'LINIE': 'line',
+        'UMLAUF': 'sortie',
+        'FAHRT': 'run',
+        'HALT': 'stop',
+        'LATITUDE': 'latitude',
+        'LONGITUDE': 'longitude',
+        'EINSTEIGER': 'count_people_boarding',
+        'AUSSTEIGER': 'count_people_disembarking'
+    }
+    try:
+        dta = dta.rename(columns=fields, errors='raise')
+    except KeyError as err:
+        raise dagster.Failure(
+            description='Input malformed: one or several columns missing.',
+            metadata={
+                'missing columns': str(err),
+                'detected columns': dta.columns
+            }
+        )
 
-    # ensure we are importing a thusfar unknown file
-    if context.resources.edmo_vehdata.check_file_already_imported(nd.checksum):
-        raise FileAlreadyImportedError(file, checksum)
+    # extract date
+    datum = pd.to_datetime(dta.pop('date'), dayfirst=True)
+    for field in ('time', 'expected_time'):
+        dta[field] = datum + pd.to_timedelta(dta[field])
 
-    # dump contents of file into a newly created table
-    context.log.info('loading raw data into staging table ...')
-    nd.lines = context.resources.edmo_vehdata.import_csv_file(handle, sep=nd.sep, table=nd.table)
-    context.log.info(f'ingested {nd.lines} lines')
+    # reduce to categoricals
+    for field in ('type', 'vehicle', 'line', 'sortie', 'run', 'stop'):
+        dta[field] = dta[field].astype('category')
 
-    return nd
+    # adjust for European number format
+    for field in ('latitude', 'longitude'):
+        dta[field] = dta[field].str.replace(',', '.').astype('float')
 
+    # adjust format (should already have been done, but just to be safe)
+    for field  in ('count_people_boarding', 'count_people_disembarking'):
+        dta[field] = dta[field].astype('Int16')
 
-@dagster.op(required_resource_keys={'edmo_vehdata'})
-def adjust_dates(context: dagster.OpExecutionContext, nd: NewData) -> NewData:
-    context.log.info('adjusting staging table\'s date columns ...')
-    context.resources.edmo_vehdata.adjust_date(nd.date, table=nd.table)
-    return nd
-
-
-@dagster.op(required_resource_keys={'edmo_vehdata'})
-def load_data(context: dagster.OpExecutionContext, nd: NewData):
-    context.log.info('loading data into analytical tables ...')
-    context.resources.edmo_vehdata.transform_data(nd.file, nd.checksum, table=nd.table)
-
-
-@dagster.graph()
-def icts_data():
-    load_data(adjust_dates(extract_from_csv()))
-
-
-class UnusableZipFile(Exception):
-
-    def __init__(self, file: pathlib.Path, n_files: int):
-        self.file = file
-        self.n_files = int(n_files)
-        super().__init__(f'zip-file `{self.file} contains {n_files} files, but expected was exactly one')
+    # sort
+    return dta.sort_values(['vehicle', 'time'])
 
 
-def open_file(file: pathlib.Path) -> typing.Tuple[int, typing.IO]:
-    if not zipfile.is_zipfile(file):
-        return 0, file.open('rb')
-
-    archive = zipfile.ZipFile(file)
-    if len(archive.filelist) != 1:
-        raise UnusableZipFile(file, n_files=len(archive.filelist))
-    n_bytes = archive.filelist[0].file_size
-    return n_bytes, archive.open(archive.filelist[0], 'r')
-
-def human_readable_bytes(n_bytes: int) -> str:
-    if n_bytes < 1:
-        return '0 bytes'
-    k = math.floor(math.log10(n_bytes) / 3)
-    suffix = ['bytes', 'kB', 'MB', 'GB', 'TB'][k]
-    if suffix == 'bytes':
-        return f'{n_bytes} bytes'
-    return f'{n_bytes * 10**(-k*3):.2f} {suffix}'
+def find_duplicates(dta: pd.DataFrame) -> pd.DataFrame:
+    """Detect duplicate entries for the same vehicle."""
+    d = dta.groupby(['vehicle', 'time'], observed=True)[['type']].count().query('type > 1')
+    return dta.set_index(['vehicle', 'time']).loc[d.index]
 
 
-class SourceUnusable(Exception):
-    pass
-
-
-class CSVFormatProblem(SourceUnusable):
-    pass
-
-
-class HeaderLacksField(CSVFormatProblem):
-
-    def __init__(self, fields: typing.Sequence[str]):
-        self.fields = list(fields)
-        msg = ', '.join(fields)
-        super().__init__(f'input file header lacks the following field(s): {msg}')
-
-
-class UnkownCSVDialect(CSVFormatProblem):
+def identify_runs(dta: pd.DataFrame) -> pd.Series:
+    """Add a unique identify for every vehicle run.
     
-    def __init__(self):
-        super().__init__('file is not in CSV format, or uses an unkown dialect. It might either use a separator other than "," and ";", or it quotes and/or whitespace rules wrong.')
+    In this context, a run is defined as a period of time during which
+    the `sortie`, `run` and `line` values remain unchanged for a given
+    vehicle. This function returns a `pd.Series` that identifies runs
+    for a given vehicle. The identifier is an integer, that starts at
+    one and increments every time any of the three aforementioned 
+    variables changes from one ping to the next (i.e. if the columns
+    revert back to a combination of values that was seen before,
+    there will be a new run id).
+    """
+    # extract run-id for every vehicle
+    # kind-of-equivalent to using sequences in SQL
+    def seq(group):
+        d = group[['line', 'sortie', 'run']]
+        return d.ne(d.shift()).any(axis=1).cumsum()
+
+    return (dta.groupby('vehicle', group_keys=False, observed=True)
+            .apply(seq).astype('category'))
+
+
+def runs_table(dta: pd.DataFrame) -> pd.DataFrame:
+    """Derives the `runs` table from a `dta` pings record.
     
+    The `runs` table describes the operational state of a vehicle
+    while driving, namely the `sortie`, `run` and `line` numbers
+    it had at a particular time. Since those change rarely, at least
+    compared to the frequency of pings, it is more efficient to store 
+    the period of time during which a particular combination of values 
+    were active, than store the values for every single ping. This
+    function produces such a table from the ping data record `dta`.
+    """
+    # permanently add run_id to `dta` to do the following in one simple group-by
+    dta['run_id'] = identify_runs(dta)
 
-class UnsupportedDateFormat(CSVFormatProblem):
+    # `observed` is important as otherwise to avoid unused combinations of run, vehicle and line
+    # `dropna` must be deactivated to include runs with run and line NaN (if sortie=RGTR|CFL|TICE0)
+    runs = (dta.groupby(['vehicle', 'run_id', 'sortie', 'run', 'line'], observed=True, dropna=False)
+            .agg({'time': ['min', 'max']})
+            .droplevel(0, axis=1)
+            .rename(columns={'min': 'time_start', 'max': 'time_end'})
+            .reset_index()
+            .drop('run_id', axis=1)
+    )
 
-    def __init__(self, date: str):
-        self.date = date
-        super().__init__(f'Unable to infer date format from "{date}". See documentation of `odmkraken.extract.infer_format`.')
+    # don't need it anymore (just in case)
+    dta = dta.drop('run_id', axis=1)
 
+    # adjust types (category doesn't save that much anymore)
+    for field in ('vehicle', 'line', 'sortie'):
+        runs[field] = runs[field].astype('str')
+    runs['run'] = runs['run'].astype('Int32')
 
-class FileIsEmpty(CSVFormatProblem):
+    # make sortie numeric
+    r = runs['sortie'].str.extract('(?P<sortie_flag>[A-Z]*)(?P<sortie>[0-9]*)')
+    runs['sortie_flag'] = r['sortie_flag'].astype('category')
+    runs['sortie'] = r['sortie'].astype('int32')
 
-    def __init__(self):
-        super().__init__('Expected CSV header, but instead the file (or its first line) is empty')
+    return runs
 
-
-class FileHasNoData(SourceUnusable):
-
-    def __init__(self):
-        super().__init__('File is correctly formed (i.e. it has the correct CSV header) but is otherwise empty (or at least one if its first rows of data is)')
-
-
-
-def infer_format(handle: typing.IO):
-    # TODO: this is not very robust. But instead of developing it further
-    # we should take this to the next level and invest in a pandas-based
-    # workflow leveraging panderas or great expectations.
-    seps = '|'.join(CSV_KNOWN_SEPARATORS)
-    lines = [handle.readline().decode('utf-8').strip() for i in range(3)]
-    
-    match = re.match(f'[a-zA-Z0-9_]+["\']? *({seps})', lines[0])
-    if not match:
-        if len(lines[0]) == 0:
-            raise FileIsEmpty()
-        raise UnkownCSVDialect()
-    format = {'sep': match.group(1)}
-    
-    header = re.split(f'\W+', lines[0])
-    header = [f.strip('"\',;') for f in header]
-    missing = CSV_REQUIRED_FIELDS.difference(header)
-    if missing:
-        raise HeaderLacksField(iter(missing))
-
-    if any(len(l)==0 for l in lines[1:]):
-        raise FileHasNoData()
-    
-    i_datum = header.index('DATUM')
-    datum = lines[1].split(format['sep'])[i_datum]
-    
-    if re.match(r'\d{2}\.\d{2}\.\d{4}$', datum):
-        format['date'] = 'DD.MM.YYYY'
-    elif re.match(r'\d{2}-[A-Z]{3}-\d{2}$', datum):
-        format['date'] = 'DD-MON-YY'
-    elif re.match(r'\d{2}-[A-Z][a-z]{2}-\d{2}$', datum):
-        format['date'] = 'DD-Mon-YY'
-    elif re.match(r'\d{2}-[A-Z]{3}-\d{4}$', datum):
-        format['date'] = 'DD-MON-YYYY'
-    elif re.match(r'\d{2}-[A-Z][a-z]{2}-\d{4}$', datum):
-        format['date'] = 'DD-Mon-YYYY'
-    elif re.match(r'\d{4}-\d{1,2}-\d{1,2}$', datum):
-        format['date'] = 'YYYY-MM-DD'
-    else:
-        raise UnsupportedDateFormat(datum)
-
-    # TODO: check dates also apply on other date columns
-
-    return format
-
-
-def compute_checksum(handle, file_hash=hashlib.sha256(), chunk_size=8192) -> bytes:
-    handle.seek(0)
-    chunk = handle.read(chunk_size)
-    while chunk:
-        file_hash.update(chunk)
-        chunk = handle.read(chunk_size)
-    handle.seek(0)
-    return file_hash.digest()
