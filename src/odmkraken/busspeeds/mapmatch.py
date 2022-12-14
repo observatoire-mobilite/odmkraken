@@ -51,7 +51,7 @@ def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: Veh
 
 
 @dagster.op(required_resource_keys={'edmo_vehdata'})
-def extract_halts(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame):
+def extract_halts(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> None:
     context.resources.edmo_vehdata.extract_halts(vehicle_timeframe)
 
 
@@ -63,7 +63,11 @@ def mapmatch_config(start: datetime, end: datetime):
 
 
 @dagster.graph()
-def mapmatch_bus_data():
+def mapmatch_bus_data() -> None:
     timeframes = load_vehicle_timeframes()
     timeframes.map(most_likely_path)
     timeframes.map(extract_halts)
+
+
+#mapmatched_data = dagster.AssetsDefinition.from_graph(mapmatch_bus_data)
+

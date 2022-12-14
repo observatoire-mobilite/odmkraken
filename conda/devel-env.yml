@@ -1,0 +1,32 @@
+name: odm-devel  # allows to conda develop . odmkraken
+channels:
+  - observatoire-mobilite
+  - conda-forge
+  - defaults
+dependencies:
+  - python >=3.10
+  
+  # access to conda develop
+  - conda
+  - conda-build
+
+  # testing and linting
+  - pytest
+  - pytest-cov
+  - mypy
+  - black
+
+  # odmkraken dependencies
+  - dagster >=1.0.10
+  - psycopg2
+  - mapmatcher
+  - pandas
+  - pyarrow
+  
+  # mapmatcher dependencies  
+  - networkx
+  - psycopg2
+
+  # running
+  - dagit
+  - nodejs

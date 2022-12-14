@@ -4,21 +4,29 @@ import dagster
 import pandas as pd
 
 
+icts_data_dump = dagster.SourceAsset(
+    key=dagster.AssetKey('icts_data_dump'),
+    description='pings received from vehicle telemetry systems',
+    metadata={'format': 'csv'},
+    partitions_def=dagster.DailyPartitionsDefinition(start_date="2020-01-01")
+)
+
+
 @dagster.multi_asset(
-    ins={'dta': dagster.AssetIn('icts_data_dump', input_manager_key='pandas_csv_io_manager')},
+    ins={'dta': dagster.AssetIn('icts_data_dump', input_manager_key='icts_data_manager')},
     outs={
         'runs': dagster.AssetOut(
             dagster_type=pd.DataFrame,
-            io_manager_key='pandas_postgres_io_manager'
+            io_manager_key='pandas_data_manager'
         ), 'pings': dagster.AssetOut(
             dagster_type=pd.DataFrame,
-            io_manager_key='pandas_postgres_io_manager'
+            io_manager_key='pandas_data_manager'
         ), 'pings_from_stops': dagster.AssetOut(
             dagster_type=pd.DataFrame,
-            io_manager_key='pandas_postgres_io_manager'
+            io_manager_key='pandas_data_manager'
         ), 'duplicate_pings': dagster.AssetOut(
             dagster_type=pd.DataFrame, is_required=False,
-            io_manager_key='pandas_csv_io_manager'
+            io_manager_key='pandas_data_manager'
         )
     },
     partitions_def=dagster.DailyPartitionsDefinition(start_date="2020-01-01")
@@ -65,7 +73,7 @@ def normalized_ping_record(
               'stop', 'expected_time', 'count_people_boarding',
               'count_people_disembarking']
     pings_from_stops = dta.query('type!=-1')[fields]
-    pings_from_stops['type'].replace({
+    pings_from_stops['type'] = pings_from_stops['type'].replace({
         0: 'geplante Haltestelle + Fahrplanpunkt',
         1: 'Bedarfshaltestelle (geplant)',
         2: 'ungeplante Haltestelle + Tür offen',
@@ -73,12 +81,12 @@ def normalized_ping_record(
         4: 'Durchfahrt ohne Fahrgastaufnahme',
         5: 'Haltestelle + kein Fahrplanpunkt',
         6: 'Durchfahrt ohne Fahrgastaufnahme oder Fahrplanpunkt'
-    }, inplace=True)
+    }).astype('str').astype('category')
     yield dagster.Output(
         value=pings_from_stops,
         output_name='pings_from_stops',
         metadata={
-            'number of records': len(pings_from_stops),
+            'number of records': dagster.MetadataValue.int(len(pings_from_stops)),
             'earliest record': str(pings_from_stops['time'].min()),
             'latest record': str(pings_from_stops['time'].max()),
             'number of vehicles': len(pings_from_stops.vehicle.unique())
@@ -208,11 +216,8 @@ def runs_table(dta: pd.DataFrame) -> pd.DataFrame:
             .droplevel(0, axis=1)
             .rename(columns={'min': 'time_start', 'max': 'time_end'})
             .reset_index()
-            .drop('run_id', axis=1)
+            .drop('run_id', axis=1) # don't need that anymore
     )
-
-    # don't need it anymore (just in case)
-    dta = dta.drop('run_id', axis=1)
 
     # adjust types (category doesn't save that much anymore)
     for field in ('vehicle', 'line', 'sortie'):
@@ -226,3 +231,29 @@ def runs_table(dta: pd.DataFrame) -> pd.DataFrame:
 
     return runs
 
+
+@dagster.asset
+def vehicle_timeframes(context: dagster.OpExecutionContext, runs: pd.DataFrame) -> pd.DataFrame:
+    return (
+        runs.groupby(['vehicle'])
+        .agg({
+            'time_start': 'min',
+            'time_end': 'max'
+        }).rename(columns={'min': 'time_start', 'max': 'time_end'})
+        .reset_index()
+    )
+
+
+@dagster.asset
+def new_lines(context: dagster.OpExecutionContext, runs: pd.DataFrame) -> pd.DataFrame:
+    pass
+
+
+@dagster.asset
+def new_stops(context: dagster.OpExecutionContext, runs: pd.DataFrame) -> pd.DataFrame:
+    pass
+
+
+@dagster.asset
+def new_vehicles(context: dagster.OpExecutionContext, vehicle_timeframes: pd.DataFrame) -> pd.DataFrame:
+    pass
