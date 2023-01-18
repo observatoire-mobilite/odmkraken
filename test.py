@@ -8,6 +8,12 @@ import collections
 import contextlib
 
 
+def compute(job):
+    t = random.random() * 0.1
+    time.sleep(t)
+    return t
+
+
 def subscriber(jobs: mp.Queue, done: mp.Queue):
     while True:
         try:
@@ -17,8 +23,7 @@ def subscriber(jobs: mp.Queue, done: mp.Queue):
             break
         
         # process job
-        t = random.random() * 0.1
-        time.sleep(t)
+        t = compute(job)
         
         done.put((mp.current_process().pid, t), timeout=10)
 
@@ -44,6 +49,9 @@ class ResultGatherer:
                 self.results.append(res)
             except Empty:
                 break
+
+    def total(self):
+        return sum(r[1] for r in self.results)
             
 
 
@@ -69,7 +77,31 @@ def publisher():
     for p in processes:
         p.join()
     print(results.count())
+    print(results.total())
 
 
+
+class Processor:
+
+    def __init__(self):
+        self.t = 0
+
+    def process_result(self, t):
+        self.t += t
+
+
+def main():
+
+    pending_jobs = iter(uuid.uuid4() for i in range(1500))
+    p = Processor()
+    with mp.Pool() as pool:
+        for job in pending_jobs:
+            res = pool.apply_async(compute, args=(job,), callback=p.process_result)
+        res.get()
+    print(p.t)
+    
 if __name__ == '__main__':
+    t0 = time.perf_counter()
+    main()
     publisher()
+    print(time.perf_counter() - t0)
