@@ -15,9 +15,11 @@ local_icts_data_manager = icts_data_manager.configured({
 @dagster.repository
 def busspeeds():
     return [
-        mapmatch_bus_data.to_job(resource_defs=RESOURCES, config=mapmatch_config),
         *dagster.with_resources(
-            dagster.load_assets_from_modules([extract]),
+            [
+                *dagster.load_assets_from_modules([extract]), 
+                dagster.AssetsDefinition.from_graph(mapmatch_bus_data)
+            ],
             resource_defs={'icts_data_manager': local_icts_data_manager,
                            'pandas_data_manager': pandas_parquet_manager}
         ),

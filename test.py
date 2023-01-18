@@ -90,7 +90,7 @@ class Processor:
         self.t += t
 
 
-def main():
+def pool_apply_async():
 
     pending_jobs = iter(uuid.uuid4() for i in range(1500))
     p = Processor()
@@ -99,9 +99,48 @@ def main():
             res = pool.apply_async(compute, args=(job,), callback=p.process_result)
         res.get()
     print(p.t)
+
+
+def pool_map():
+
+    pending_jobs = iter(uuid.uuid4() for i in range(1500))
+    with mp.Pool() as pool:
+        res = pool.map(compute, pending_jobs)
+    print(sum(res))
+
+
+
+if __name__ == '__main__2':
+    for handle in (pool_map, pool_apply_async):
+        
+        t0 = time.perf_counter()
+        handle()
+        print(handle.__name__, time.perf_counter() - t0)
+
+
+
+class DB:
+
+    _singleton = None
+
+    def __new__(cls, dsn: str=None):
+        # with this implementation of a singleton,
+        # DB must not have an __init__ method!
+        # so we need to connect to the DB already here
+        if cls._singleton is None:
+            db = super().__new__(cls)
+            db.connection = dsn
+            print(f'connecting to {dsn}')
+            cls._singleton = db
+
+        return cls._singleton
     
+    def method(self):
+        print('yay')
+
+
 if __name__ == '__main__':
-    t0 = time.perf_counter()
-    main()
-    publisher()
-    print(time.perf_counter() - t0)
+    
+    db = DB(dsn='test')
+    print(DB(dsn='test2') is db)
+    DB().method()
