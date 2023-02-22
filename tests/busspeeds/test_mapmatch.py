@@ -16,7 +16,7 @@ def fake_edmo(mocker):
     
     fake_data = [fake_tf(i) for i in range(4)]
     fake_edmo._data = fake_data
-    fake_edmo.get_timeframes_on = mocker.MagicMock(return_value=fake_data)
+    fake_edmo.get_timeframes_by_file = mocker.MagicMock(return_value=fake_data)
     fake_edmo.get_edgelist = mocker.MagicMock()
     fake_fixes = [(1, 2, 3.4, 0.1, 0, 1.), (2, 3, 10.1, 0.9, 0, 8.)]
     fake_edmo.get_nearby_roads = mocker.MagicMock(return_value=fake_fixes)
@@ -33,11 +33,11 @@ def fake_edmo(mocker):
 
 
 def test_load_vehicle_timeframes(fake_edmo, mocker):
-    t0, t1 = '2022-1-1 04:00', '2022-1-2 04:00'
+    fid = uuid.uuid4()
     ctx = dagster.build_op_context(resources={'edmo_vehdata': fake_edmo},
-                                   config={'date_from': t0, 'date_to': t1})
+                                   config={'file_id': str(fid)})
     dyn = list(load_vehicle_timeframes(ctx))
-    fake_edmo.get_timeframes_on.assert_called_once_with(t0, t1)
+    fake_edmo.get_timeframes_by_file.assert_called_once_with(fid)
     assert len(dyn) == 4
     assert isinstance(dyn[0], dagster.DynamicOutput)
     assert dyn[0].mapping_key == fake_edmo._data[0].id.hex
@@ -133,11 +133,3 @@ def test_extract_halts(fake_edmo, fake_tf):
     extract_halts(ctx, fake_tf)
     fake_edmo.extract_halts.assert_called_once_with(fake_tf)
 
-
-def test_mapmatch_config(mocker):
-    t0 = datetime(2022, 4, 12, 4)
-    t1 = datetime(2022, 4, 13, 4)
-    res = mapmatch_config(t0, t1)
-    conf = res['ops']['load_vehicle_timeframes']['config']
-    assert conf['date_from'] == t0.strftime('%Y-%m-%d %H:%M')
-    assert conf['date_to'] == t1.strftime('%Y-%m-%d %H:%M')
