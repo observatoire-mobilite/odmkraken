@@ -28,6 +28,7 @@ def get_nearby_roads(t: datetime, x: float, y: float, context: dagster.OpExecuti
 class MapMatcher:
 
     def __init__(self, dsn: str):
+        pass
         
 
     @property
@@ -60,7 +61,7 @@ class MapMatcher:
 @dagster.asset(
     required_resource_keys={'edmo_vehdata', 'shortest_path_engine'}
 )
-def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> typing.List[typing.Tuple['uuid.UUID', bool, str]]
+def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> typing.List[typing.Tuple['uuid.UUID', bool, str]]:
     
     # retrieve timeframes
     dates = context.op_config['date_from'], context.op_config['date_to']

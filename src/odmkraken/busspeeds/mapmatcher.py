@@ -15,12 +15,12 @@ import dagster
 import pandas as pd
 
 
-class Context:
+class MPContext:
 
-    _singleton: typing.Optional['Context']=None
+    _singleton: typing.Optional['MPContext']=None
 
     def __new__(cls, **kwargs):
-        if Context._singleton is None:
+        if MPContext._singleton is None:
             ctx = super().__new__(cls)
             for arg, val in kwargs.items():
                 setattr(ctx, arg, val)
@@ -89,18 +89,18 @@ def init_worker(dsn: str):
     db = DB(dsn)
     with db.get_edgelist() as cur:
         path_finder = NXPathFinderWithLocalCache(cur)
-    Context(db=db, path_finder=path_finder)
+    MPContext(db=db, path_finder=path_finder)
 
 
 def mapmatch_timeframe(tf: VehicleTimeFrame):
 
-    db = Context().db
+    db = MPContext().db
     t0 = time.perf_counter()
 
     # do the actual mapmatching
     with db.get_pings(tf) as cur:
         path = reconstruct_optimal_path(cur, db.get_nearby_roads, 
-            shortest_path_engine=Context.path_finder, 
+            shortest_path_engine=MPContext.path_finder, 
             scorer=Scorer()
         )
 
@@ -116,7 +116,7 @@ def mapmatch_timeframe(tf: VehicleTimeFrame):
 
 
 @dagster.asset(partitions_def=dagster.DailyPartitionsDefinition(start_date="2020-01-01"))
-def most_likely_path(vehicle_timeframes: pd.Dataframe, context: dagster.OpExecutionContext) -> typing.List[typing.Tuple['uuid.UUID', bool, str]]
+def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframes: pd.DataFrame) -> pd.DataFrame:
     
     # retrieve timeframes
     dates = context.op_config['date_from'], context.op_config['date_to']

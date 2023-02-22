@@ -36,8 +36,9 @@ def normalized_ping_record(
     dta: pd.DataFrame
 ) -> typing.Iterator[dagster.Output]:
     """Normalize ICTS input data."""
-    # adjust raw format to something meaningful
-    dta = adjust_format(dta)
+    
+    # adjust raw format and sort
+    dta = adjust_format(dta).sort_values(['vehicle', 'time'])
 
     # report any duplicate records
     duplicates = find_duplicates(dta)
@@ -56,15 +57,20 @@ def normalized_ping_record(
     dta.drop_duplicates(['vehicle', 'time'], keep='last', inplace=True)
 
     # export table of location pings
-    pings = dta.query('type==-1')[['vehicle', 'time', 'longitude', 'latitude']]
+    pings = dta[['vehicle', 'time', 'longitude', 'latitude']]
     yield dagster.Output(
         value=pings,
         output_name='pings',
         metadata={
-            'number of records': len(pings),
+            'number of recorded pings': len(pings),
             'earliest record': str(pings['time'].min()),
             'latest record': str(pings['time'].max()),
-            'number of vehicles': len(pings.vehicle.unique())
+            'number of vehicles': len(pings.vehicle.unique()),
+            'median time between pings': float(pings.groupby('vehicle').agg({'time': lambda r: r.diff().mean()}).mean().dt.total_seconds()),
+            'extent of vehicle motion': {'xmin': float(pings['longitude'].min()),
+                                         'xmax': float(pings['longitude'].max()),
+                                         'ymin': float(pings['latitude'].min()),
+                                         'ymax': float(pings['latitude'].max())}
         }
     )
 
@@ -72,7 +78,25 @@ def normalized_ping_record(
     fields = ['vehicle', 'time', 'type', 'longitude', 'latitude',
               'stop', 'expected_time', 'count_people_boarding',
               'count_people_disembarking']
-    pings_from_stops = dta.query('type!=-1')[fields]
+    
+    # extract 'special' pings
+    filt = dta['type'] != -1
+    pings_from_stops = dta.loc[filt, fields]
+    
+    # get previous resp. next ping
+    for i, label in ((-1, 'until_next'), (1, 'since_last')):
+
+        # calculate difference and store as float
+        dt = pings_from_stops['time'] - dta.shift(i).loc[filt, 'time']
+        dt = dt.dt.total_seconds() * i
+        pings_from_stops.loc[:, f'seconds_{label}'] = dt
+
+        # reset if vehicle idientifiers dont match
+        # (this might happen if the first or last ping are 'special')
+        reset = pings_from_stops['vehicle'] != dta.shift(i).loc[filt, 'vehicle']
+        pings_from_stops.loc[reset, f'time_{label}'] = None
+
+    # change ping type to something more human-readable
     pings_from_stops['type'] = pings_from_stops['type'].replace({
         0: 'geplante Haltestelle + Fahrplanpunkt',
         1: 'Bedarfshaltestelle (geplant)',
@@ -82,14 +106,26 @@ def normalized_ping_record(
         5: 'Haltestelle + kein Fahrplanpunkt',
         6: 'Durchfahrt ohne Fahrgastaufnahme oder Fahrplanpunkt'
     }).astype('str').astype('category')
+
+    ratio = pings_from_stops['count_people_disembarking'].count() / len(pings_from_stops)
+    total_disembarkments = int(pings_from_stops['count_people_disembarking'].sum())
+    dt = pings_from_stops.eval('time - expected_time')
     yield dagster.Output(
         value=pings_from_stops,
         output_name='pings_from_stops',
         metadata={
-            'number of records': dagster.MetadataValue.int(len(pings_from_stops)),
             'earliest record': str(pings_from_stops['time'].min()),
             'latest record': str(pings_from_stops['time'].max()),
-            'number of vehicles': len(pings_from_stops.vehicle.unique())
+            'number of recorded halts': dagster.MetadataValue.int(len(pings_from_stops)),
+            'records with counting data': int(pings_from_stops['count_people_boarding'].count()),
+            'share of counted halts': float(ratio),
+            'number of vehicles': len(pings_from_stops.vehicle.unique()),
+            'vehicles with counting data': float((pings_from_stops.groupby('vehicle').agg({'count_people_disembarking': 'count'}) > 0).sum()['count_people_disembarking']),
+            'counted boardings': int(pings_from_stops['count_people_boarding'].sum()),
+            'counted disembarkments': total_disembarkments,
+            'estimated disembarkments': float(pings_from_stops['count_people_disembarking'].sum() / ratio),
+            'average delay [s]': float(dt.mean().round('1s').total_seconds()),
+            'average delay per pax [s]': int((dt.dt.total_seconds().fillna(0) * pings_from_stops['count_people_disembarking']).sum() / pings_from_stops['count_people_disembarking'].sum())
         }
     )
 
@@ -142,7 +178,7 @@ def adjust_format(dta: pd.DataFrame):
             description='Input malformed: one or several columns missing.',
             metadata={
                 'missing columns': str(err),
-                'detected columns': dta.columns
+                'detected columns': ', '.join(dta.columns)
             }
         )
 
@@ -163,8 +199,7 @@ def adjust_format(dta: pd.DataFrame):
     for field  in ('count_people_boarding', 'count_people_disembarking'):
         dta[field] = dta[field].astype('Int16')
 
-    # sort
-    return dta.sort_values(['vehicle', 'time'])
+    return dta
 
 
 def find_duplicates(dta: pd.DataFrame) -> pd.DataFrame:
