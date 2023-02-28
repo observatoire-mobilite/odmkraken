@@ -8,7 +8,6 @@ from odmkraken.resources import RESOURCES
 from odmkraken.resources.pandas import pandas_parquet_manager, icts_data_manager
 
 
-
 @dagster.repository
 def busspeeds():
     return [
@@ -20,6 +19,11 @@ def busspeeds():
             resource_defs={'icts_data_manager': icts_data_manager,
                            'pandas_data_manager': pandas_parquet_manager}
         ),
-        dagster.define_asset_job(name='process_busdata', selection=['duplicate_pings', 'pings', 'pings_from_stops', 'runs', 'most_likely_path'], partitions_def=busdata_partition),
+        dagster.define_asset_job(
+            name='process_busdata', 
+            partitions_def=busdata_partition,
+            selection=['duplicate_pings', 'pings', 'pings_from_stops', 'runs', 'most_likely_path'], 
+            config={'ops': {'most_likely_path': {'config': {'network_db_dsn': {'env': 'NETWORK_DB_DSN'}}}}}
+        ),
         load_network.to_job(resource_defs=RESOURCES)
     ]

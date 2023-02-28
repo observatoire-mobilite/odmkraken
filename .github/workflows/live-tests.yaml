@@ -77,6 +77,6 @@ jobs:
         dagster job backfill -m odmkraken -j process_busdata --partitions 2023-01-01 --noprompt
       env:
         TEST_FILE: tests/testdata.csv.zip
-        DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
+        NETWORK_DB_DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
         PYTHONPATH: ./src
         DAGSTER_HOME: /home/runner/dagster_home
