@@ -144,8 +144,10 @@ def mapmatch_timeframe(vehicle: str):
         pings[['longitude', 'latitude', 'time']].itertuples(name=None, index=False),
         MPContext().db.get_nearby_roads, 
         shortest_path_engine=MPContext().path_finder, 
-        scorer=Scorer()
+        scorer=Scorer(),
+        allow_incomplete=True
     )
+
 
     # reproject in the perspective of the road segments
     projector = ProjectLinear()
