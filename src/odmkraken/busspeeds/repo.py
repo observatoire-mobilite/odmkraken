@@ -20,6 +20,6 @@ def busspeeds():
             resource_defs={'icts_data_manager': icts_data_manager,
                            'pandas_data_manager': pandas_parquet_manager}
         ),
-        dagster.define_asset_job(name='process_busdata', selection=['duplicate_pings', 'pings', 'pings_from_stops', 'runs'], partitions_def=busdata_partition),
+        dagster.define_asset_job(name='process_busdata', selection=['duplicate_pings', 'pings', 'pings_from_stops', 'runs', 'most_likely_path'], partitions_def=busdata_partition),
         load_network.to_job(resource_defs=RESOURCES)
     ]
