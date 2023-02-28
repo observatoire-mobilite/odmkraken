@@ -71,9 +71,14 @@ def normalized_ping_record(
     dta.drop_duplicates(['vehicle', 'time'], keep='last', inplace=True)
 
     # adjust CRS
-    xy = gpd.points_from_xy(dta['longitude'], dta['latitude'], crs=context.config.input_crs)
-    xy = xy.to_crs(context.config.target_crs)
+    xy = gpd.points_from_xy(dta['longitude'], dta['latitude'], crs=context.op_config['input_crs'])
+    xy = xy.to_crs(context.op_config['target_crs'])
     dta['longitude'], dta['latitude'] = xy.x, xy.y
+
+    # estimate distance driven
+    dist = (gpd.GeoDataFrame({'vehicle': dta['vehicle'], 'geometry': xy})
+            .groupby('vehicle')
+            .agg({'geometry': lambda g: g.distance(g.shift()).fillna(0).sum()}))
 
     # export table of location pings
     pings = dta[['vehicle', 'time', 'longitude', 'latitude']]
@@ -85,11 +90,14 @@ def normalized_ping_record(
             'earliest record': str(pings['time'].min()),
             'latest record': str(pings['time'].max()),
             'number of vehicles': len(pings.vehicle.unique()),
-            'median time between pings': float(pings.groupby('vehicle').agg({'time': lambda r: r.diff().mean()}).mean().dt.total_seconds()),
-            'extent of vehicle motion': {'xmin': float(pings['longitude'].min()),
-                                         'xmax': float(pings['longitude'].max()),
-                                         'ymin': float(pings['latitude'].min()),
-                                         'ymax': float(pings['latitude'].max())}
+            'median time between pings': float(pings.groupby('vehicle').agg({'time': lambda r: r.diff().mean()}).mean().dt.total_seconds().round(1)),
+            'extent of vehicle motion': {'xmin': float(pings['longitude'].min().round(1)),
+                                         'xmax': float(pings['longitude'].max().round(1)),
+                                         'ymin': float(pings['latitude'].min().round(1)),
+                                         'ymax': float(pings['latitude'].max().round(1))},
+            'estimated total vkm': float((dist.sum() * 1e-3).round(1)),
+            'estimated vkm per vehicle': float((dist.mean() * 1e-3).round(1)),
+            'maximum vkm recorded': float((dist.max() * 1e-3).round(1))
         }
     )
 
@@ -137,14 +145,14 @@ def normalized_ping_record(
             'latest record': str(pings_from_stops['time'].max()),
             'number of recorded halts': dagster.MetadataValue.int(len(pings_from_stops)),
             'records with counting data': int(pings_from_stops['count_people_boarding'].count()),
-            'share of counted halts': float(ratio),
+            'share of counted halts': float(ratio.round(3)),
             'number of vehicles': len(pings_from_stops.vehicle.unique()),
-            'vehicles with counting data': float((pings_from_stops.groupby('vehicle').agg({'count_people_disembarking': 'count'}) > 0).sum()['count_people_disembarking']),
+            'vehicles with counting data': float((pings_from_stops.groupby('vehicle').agg({'count_people_disembarking': 'count'}) > 0).sum()['count_people_disembarking'].round(1)),
             'counted boardings': int(pings_from_stops['count_people_boarding'].sum()),
             'counted disembarkments': total_disembarkments,
-            'estimated disembarkments': float(pings_from_stops['count_people_disembarking'].sum() / ratio) if ratio > 0 else 'undefined',
+            'estimated disembarkments': float((pings_from_stops['count_people_disembarking'].sum() / ratio).round(1)) if ratio > 0 else 'undefined',
             'average delay [s]': float(dt.mean().round('1s').total_seconds()),
-            'average delay per pax [s]': int((dt.dt.total_seconds().fillna(0) * pings_from_stops['count_people_disembarking']).sum() / total_disembarkments) if total_disembarkments > 0 else 'undefined'
+            'average delay per pax [s]': float(((dt.dt.total_seconds().fillna(0) * pings_from_stops['count_people_disembarking']).sum() / total_disembarkments).round(1)) if total_disembarkments > 0 else 'undefined'
         }
     )
 

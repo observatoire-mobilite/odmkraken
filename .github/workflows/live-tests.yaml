@@ -42,7 +42,7 @@ jobs:
           dagster>=1.0.10
           mapmatcher
           pandas
-          fastparquet
+          pyarrow
           paramiko
           geopandas
     
