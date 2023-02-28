@@ -22,6 +22,8 @@ dependencies:
   - mapmatcher
   - pandas
   - pyarrow
+  - geopandas
+  - paramiko
   
   # mapmatcher dependencies  
   - networkx

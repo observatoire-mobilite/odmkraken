@@ -19,6 +19,8 @@ requirements:
     - mapmatcher
     - pandas
     - pyarrow
+    - geopandas
+    - paramiko
   build:
     - pip
     - setuptools >=56

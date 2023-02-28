@@ -2,6 +2,7 @@
 import typing
 import dagster
 import pandas as pd
+import geopandas as gpd
 from .common import busdata_partition
 
 
@@ -30,7 +31,19 @@ icts_data_dump = dagster.SourceAsset(
             io_manager_key='pandas_data_manager'
         )
     },
-    partitions_def=busdata_partition
+    partitions_def=busdata_partition,
+    config_schema={
+        'input_crs': dagster.Field(
+            str,
+            description='CRS of the input data. Usually WGS84, but can be anything accepted by `pyproj.CRS.from_user_input()`. (default: EPSG:4326)',
+            default_value='EPSG:4326'
+        ),
+        'target_crs': dagster.Field(
+            str,
+            description='CRS used for mapmatching. Should be flat and metric, but can be anything accepted by `pyproj.CRS.from_user_input()`. (default: EPSG:2169)',
+            default_value='EPSG:2169'
+        )
+    }
 )
 def normalized_ping_record(
     context: dagster.OpExecutionContext,
@@ -56,6 +69,11 @@ def normalized_ping_record(
 
     # just drop duplicates
     dta.drop_duplicates(['vehicle', 'time'], keep='last', inplace=True)
+
+    # adjust CRS
+    xy = gpd.points_from_xy(dta['longitude'], dta['latitude'], crs=context.config.input_crs)
+    xy = xy.to_crs(context.config.target_crs)
+    dta['longitude'], dta['latitude'] = xy.x, xy.y
 
     # export table of location pings
     pings = dta[['vehicle', 'time', 'longitude', 'latitude']]

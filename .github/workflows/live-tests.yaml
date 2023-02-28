@@ -44,6 +44,7 @@ jobs:
           pandas
           fastparquet
           paramiko
+          geopandas
     
     - name: Set up database
       id: db
