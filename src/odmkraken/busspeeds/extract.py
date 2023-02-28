@@ -223,12 +223,15 @@ def identify_runs(dta: pd.DataFrame) -> pd.Series:
     """
     # extract run-id for every vehicle
     # kind-of-equivalent to using sequences in SQL
+    # behaves incorrectly if there is only one vehicle
     def seq(group):
-        d = group[['line', 'sortie', 'run']].astype(object).fillna('-N/A-')  # 'nan' counts too
-        return d.ne(d.shift()).any(axis=1).cumsum()
+        d = group[['line', 'sortie', 'run']].astype(object).fillna('.--^--.').astype('category')  # 'nan' counts too
+        return d.ne(d.shift()).any(axis=1).cumsum() 
 
+    # if there is only one vehicle, this returns a dataframe
+    # the simplest way of dealing with that was calling `squeeze`
     return (dta.groupby('vehicle', group_keys=False, observed=True)
-            .apply(seq).astype('category'))
+            .apply(seq).astype('category').squeeze()) 
 
 
 def runs_table(dta: pd.DataFrame) -> pd.DataFrame:
