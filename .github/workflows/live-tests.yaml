@@ -73,7 +73,7 @@ jobs:
       shell: bash -l {0}
       run: |
         mkdir ${DAGSTER_HOME}
-        cp ${TEST_FILE} 20230101180001_LUXGPS.csv.zip
+        cp ${TEST_FILE} 20230106180001_LUXGPS.csv.zip
         dagster job backfill -m odmkraken -j process_busdata --partitions 2023-01-01 --noprompt
       env:
         TEST_FILE: tests/testdata.csv.zip
