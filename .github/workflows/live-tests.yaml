@@ -79,4 +79,4 @@ jobs:
         TEST_FILE: tests/testdata.csv.zip
         DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
         PYTHONPATH: ./src
-        DAGSTER_HOME: ./dagster_home
+        DAGSTER_HOME: /home/runner/dagster_home
