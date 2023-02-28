@@ -97,15 +97,15 @@ def icts_data_manager(init_context: dagster.InitResourceContext):
 class PandasParquetManager(dagster.IOManager):
     """Saves and retrieves Pandas dataframes as parquet from disk."""
     def __init__(self, base_path: typing.Union[Path, str]=Path('.')):
-        self.base_path = Path(base_path)
+        self.base_path = Path(base_path).absolute()
 
     def filename(self, asset_key: dagster.AssetKey, partition_key: typing.Optional[str]=None) -> Path:
         """Return target path for specified asset."""
+        parts = list(asset_key.path)
         if partition_key:
             t = datetime.fromisoformat(partition_key)
-            file = Path(*asset_key.path, t.strftime('%Y%m%d'))
-        else:
-            file = Path(*asset_key.path)
+            parts.append(t.strftime('%Y%m%d'))
+        file = Path(*parts)
         return self.base_path / file.with_suffix('.parquet')
 
     def handle_output(self, context: dagster.OutputContext, obj: pd.DataFrame):
