@@ -224,7 +224,7 @@ def identify_runs(dta: pd.DataFrame) -> pd.Series:
     # extract run-id for every vehicle
     # kind-of-equivalent to using sequences in SQL
     def seq(group):
-        d = group[['line', 'sortie', 'run']]
+        d = group[['line', 'sortie', 'run']].fillna('-N/A-')  # 'nan' counts too
         return d.ne(d.shift()).any(axis=1).cumsum()
 
     return (dta.groupby('vehicle', group_keys=False, observed=True)
