@@ -166,7 +166,7 @@ def mapmatch_timeframe(vehicle: str):
     config_schema={
         'network_db_dsn': dagster.Field(
             dagster.StringSource, 
-            dscription='DSN to the PostGIS enabled database providing the `network.get_edgelist` and `network.get_nearby_roads` procedures.'
+            description='DSN to the PostGIS enabled database providing the `network.get_edgelist` and `network.get_nearby_roads` procedures.'
         )
     }
 )
