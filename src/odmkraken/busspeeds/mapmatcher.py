@@ -76,9 +76,10 @@ class DB:
 
     def get_nearby_roads(self, t: datetime, x: float, y: float, radius: float=90):
         """Get roads physically clos to given point at given time"""
+        roads, r = [], 0  # just to please pyright
         for r in (100, 200, 500, 1000):
             with self.callproc('network.nearby_roads', float(x), float(y), float(radius)) as cur:
-                roads = [candidate_solution(*r, t) for r in roads]
+                roads = [candidate_solution(*r, t) for r in cur]
             if roads:
                 break
         if (r > 100):
