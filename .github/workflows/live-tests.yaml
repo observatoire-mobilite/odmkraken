@@ -61,26 +61,17 @@ jobs:
         echo "{ops: {load_edges: {config: {network_edge_file: '${EDGES_FILE}'}}, load_nodes: {config: {network_node_file: '${NODES_FILE}'}}}, resources: {local_postgres: {config: {dsn: {env: 'DSN' }}}}}" > job.yaml
         dagster job execute -m odmkraken -j load_network -c job.yaml    
       env:
-        DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
         EDGES_FILE: tests/network.edges.csv.zip
         NODES_FILE: tests/network.nodes.csv.zip
+        DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
         PYTHONPATH: ./src
     
-    - name: Run icts_data
+    - name: Run process_busdata on tests/testdata.zip
       shell: bash -l {0}
       run: |
-        echo "{ops: {extract_from_csv: {config: {file: '${FILE}'}}}, resources: {local_postgres: {config: {dsn: {env: 'DSN'}}}}}" > icts_data_job.yaml
-        dagster job execute -m odmkraken -j icts_data -c icts_data_job.yaml
+        cp ${TEST_FILE} 20230101180001_LUXGPS.csv.zip
+        dagster job backfill -m odmkraken -j process_busdata --partitions 2023-01-01 --noprompt
       env:
-        DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
-        FILE: tests/testdata.csv.zip
-        PYTHONPATH: ./src
-
-    - name: Run mapmatch_bus_data
-      shell: bash -l {0}
-      run: |
-        echo "{ops: {load_vehicle_timeframes: {config: {date_from: '2022-09-08 04:00', date_to: '2022-09-09 04:00'}}}, resources: {local_postgres: {config: {dsn: {env: 'DSN'}}}}}" > mapmatch_bus_data.yaml
-        dagster job execute -m odmkraken -j mapmatch_bus_data -c mapmatch_bus_data.yaml
-      env:
+        TEST_FILE: tests/testdata.zip
         DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
         PYTHONPATH: ./src
