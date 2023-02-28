@@ -124,9 +124,9 @@ def normalized_ping_record(
             'vehicles with counting data': float((pings_from_stops.groupby('vehicle').agg({'count_people_disembarking': 'count'}) > 0).sum()['count_people_disembarking']),
             'counted boardings': int(pings_from_stops['count_people_boarding'].sum()),
             'counted disembarkments': total_disembarkments,
-            'estimated disembarkments': float(pings_from_stops['count_people_disembarking'].sum() / ratio),
+            'estimated disembarkments': float(pings_from_stops['count_people_disembarking'].sum() / ratio) if ratio > 0 else 'undefined',
             'average delay [s]': float(dt.mean().round('1s').total_seconds()),
-            'average delay per pax [s]': int((dt.dt.total_seconds().fillna(0) * pings_from_stops['count_people_disembarking']).sum() / pings_from_stops['count_people_disembarking'].sum())
+            'average delay per pax [s]': int((dt.dt.total_seconds().fillna(0) * pings_from_stops['count_people_disembarking']).sum() / total_disembarkments) if total_disembarkments > 0 else 'undefined'
         }
     )
 
