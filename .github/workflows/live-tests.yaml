@@ -75,6 +75,6 @@ jobs:
         cp ${TEST_FILE} 20230101180001_LUXGPS.csv.zip
         dagster job backfill -m odmkraken -j process_busdata --partitions 2023-01-01 --noprompt
       env:
-        TEST_FILE: tests/testdata.zip
+        TEST_FILE: tests/testdata.csv.zip
         DSN: ${{ steps.db.outputs.dsn_edmo_aoo }}
         PYTHONPATH: ./src
