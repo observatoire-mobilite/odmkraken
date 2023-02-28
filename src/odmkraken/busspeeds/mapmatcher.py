@@ -141,7 +141,7 @@ def mapmatch_timeframe(vehicle: str):
 
     # do the actual mapmatching
     path = reconstruct_optimal_path(
-        pings,
+        pings[['longitude', 'latitude', 'time']].itertuples(name=None, index=False),
         MPContext().db.get_nearby_roads, 
         shortest_path_engine=MPContext().path_finder, 
         scorer=Scorer()
