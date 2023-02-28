@@ -49,13 +49,22 @@ class DB:
     and access to commonly required SQL calls.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, proc_edgelist: str='network.get_edgelist', 
+                 proc_nearby_roads: str='network.nearby_roads', **kwargs):
         """Creates a new database connection.
 
         All arguments and keywords are piped through straight to `psycopg2.connect`,
-        so see its documentation for API.
+        so see its documentation for API, with the exception of:
+
+        Arugments:
+            - proc_edgelist: name (str) of the stored procedure returining the routable graph
+                for use with the `networkx` shortest-path finder.
+            - proc_nearby_road: name (str) of the stored procedure returning the set of candidate
+                roads next to a specified point (= current ping).
         """
         self.conn = psycopg2.connect(*args, **kwargs)
+        self.proc_edgelist = str(proc_edgelist)
+        self.proc_nearby_roads = str(proc_nearby_roads)
 
     @contextmanager
     def cursor(self, name: typing.Optional[str]=None):
@@ -87,13 +96,13 @@ class DB:
 
     def get_edgelist(self):
         """Retrieve the entire network as `nx`-style list of edges."""
-        return self.callproc('network.get_edgelist')
+        return self.callproc(self.proc_edgelist)
 
     def get_nearby_roads(self, t: datetime, x: float, y: float, radius: float=90):
         """Get roads physically clos to given point at given time"""
         roads, r = [], 0  # just to please pyright
         for r in (100, 200, 500, 1000):
-            with self.callproc('network.nearby_roads', float(x), float(y), float(radius)) as cur:
+            with self.callproc(self.proc_nearby_roads, float(x), float(y), float(radius)) as cur:
                 roads = [candidate_solution(*r, t) for r in cur]
             if roads:
                 break
