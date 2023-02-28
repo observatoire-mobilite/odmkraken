@@ -2,13 +2,14 @@
 import typing
 import dagster
 import pandas as pd
+from .common import busdata_partition
 
 
 icts_data_dump = dagster.SourceAsset(
     key=dagster.AssetKey('icts_data_dump'),
     description='pings received from vehicle telemetry systems',
     metadata={'format': 'csv'},
-    partitions_def=dagster.DailyPartitionsDefinition(start_date="2020-01-01")
+    partitions_def=busdata_partition
 )
 
 
@@ -29,7 +30,7 @@ icts_data_dump = dagster.SourceAsset(
             io_manager_key='pandas_data_manager'
         )
     },
-    partitions_def=dagster.DailyPartitionsDefinition(start_date="2020-01-01")
+    partitions_def=busdata_partition
 )
 def normalized_ping_record(
     context: dagster.OpExecutionContext,
@@ -125,7 +126,8 @@ def normalized_ping_record(
             'counted disembarkments': total_disembarkments,
             'estimated disembarkments': float(pings_from_stops['count_people_disembarking'].sum() / ratio),
             'average delay [s]': float(dt.mean().round('1s').total_seconds()),
-            'average delay per pax [s]': int((dt.dt.total_seconds().fillna(0) * pings_from_stops['count_people_disembarking']).sum() / pings_from_stops['count_people_disembarking'].sum())
+            'average delay per pax [s]': int((dt.dt.total_seconds().fillna(0) * pings_from_stops['count_people_disembarking']).sum() / pings_from_stops['count_people_disembarking'].sum()),
+            'parquet_args': {'partition_cols': ['vehicle']},
         }
     )
 
@@ -267,8 +269,11 @@ def runs_table(dta: pd.DataFrame) -> pd.DataFrame:
     return runs
 
 
-@dagster.asset
-def vehicle_timeframes(context: dagster.OpExecutionContext, runs: pd.DataFrame) -> pd.DataFrame:
+@dagster.asset(partitions_def=busdata_partition)
+def vehicle_timeframes(
+    context: dagster.OpExecutionContext,
+    runs: pd.DataFrame
+) -> pd.DataFrame:
     return (
         runs.groupby(['vehicle'])
         .agg({
@@ -279,16 +284,16 @@ def vehicle_timeframes(context: dagster.OpExecutionContext, runs: pd.DataFrame) 
     )
 
 
-@dagster.asset
+@dagster.asset(partitions_def=busdata_partition)
 def new_lines(context: dagster.OpExecutionContext, runs: pd.DataFrame) -> pd.DataFrame:
     pass
 
 
-@dagster.asset
+@dagster.asset(partitions_def=busdata_partition)
 def new_stops(context: dagster.OpExecutionContext, runs: pd.DataFrame) -> pd.DataFrame:
     pass
 
 
-@dagster.asset
+@dagster.asset(partitions_def=busdata_partition)
 def new_vehicles(context: dagster.OpExecutionContext, vehicle_timeframes: pd.DataFrame) -> pd.DataFrame:
     pass

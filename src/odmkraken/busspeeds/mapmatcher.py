@@ -5,6 +5,7 @@ from mapmatcher import Itinerary, reconstruct_optimal_path, ProjectLinear, Score
 from mapmatcher.pathfinder.nx import NXPathFinderWithLocalCache
 import mapmatcher.errors
 from odmkraken.resources.edmo.busdata import VehicleTimeFrame
+from .common import busdata_partition
 from functools import partial
 import multiprocessing as mp
 from dataclasses import dataclass
@@ -115,8 +116,7 @@ def mapmatch_timeframe(tf: VehicleTimeFrame):
     return (tf.vehicle_id, tf.time_from, tf.time_to, path.times[-1], time.perf_counter() - t0)
 
 
-@dagster.asset(partitions_def=dagster.DailyPartitionsDefinition(start_date="2020-01-01"))
-def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframes: pd.DataFrame) -> pd.DataFrame:
+@dagster.asset(partitions_def=busdata_partition, config_schema={'edmo_dsn': dagster.StringSource})
     
     # retrieve timeframes
     dates = context.op_config['date_from'], context.op_config['date_to']
