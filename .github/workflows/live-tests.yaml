@@ -41,6 +41,9 @@ jobs:
           psycopg2
           dagster>=1.0.10
           mapmatcher
+          pandas
+          fastparquet
+          paramiko
     
     - name: Set up database
       id: db
