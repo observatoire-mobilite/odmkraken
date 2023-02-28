@@ -126,8 +126,7 @@ def normalized_ping_record(
             'counted disembarkments': total_disembarkments,
             'estimated disembarkments': float(pings_from_stops['count_people_disembarking'].sum() / ratio),
             'average delay [s]': float(dt.mean().round('1s').total_seconds()),
-            'average delay per pax [s]': int((dt.dt.total_seconds().fillna(0) * pings_from_stops['count_people_disembarking']).sum() / pings_from_stops['count_people_disembarking'].sum()),
-            'parquet_args': {'partition_cols': ['vehicle']},
+            'average delay per pax [s]': int((dt.dt.total_seconds().fillna(0) * pings_from_stops['count_people_disembarking']).sum() / pings_from_stops['count_people_disembarking'].sum())
         }
     )
 
