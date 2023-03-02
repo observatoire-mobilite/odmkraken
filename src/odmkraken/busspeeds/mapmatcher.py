@@ -221,6 +221,8 @@ def most_likely_path(context: dagster.OpExecutionContext, pings: pd.DataFrame) -
     return dagster.Output(
         value=res, 
         metadata={
-            'report': stats
+            'report': stats,
+            'number of vehicles': len(stats),
+            'complete runs': (stats['number_of_matched_pings'] == stats['number_of_pings']).sum()
         }
     )
