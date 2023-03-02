@@ -220,7 +220,7 @@ def adjust_format(dta: pd.DataFrame):
 
     # adjust for European number format
     for field in ('latitude', 'longitude'):
-        dta[field] = dta[field].str.replace(',', '.').astype('float')
+        dta[field] = dta[field].astype('str').str.replace(',', '.').astype('float')
 
     # adjust format (should already have been done, but just to be safe)
     for field  in ('count_people_boarding', 'count_people_disembarking'):
