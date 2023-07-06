@@ -2,27 +2,7 @@ import pytest
 from odmkraken.busspeeds.extract import *
 from pathlib import Path
 import dagster
-
-
-def test_filealreadyimportederror():
-    file = Path('test.file')
-    checksum = b'moin'
-    err = FileAlreadyImportedError(file, checksum)
-    assert err.file == file
-    assert err.checksum == checksum 
-    assert str(file) in str(err)
-
-
-def test_newdata():
-    nd = NewData(file=Path('test.zip.csv'), checksum=b'asdf', sep=',', date='moin', lines=2)
-    assert nd.checksum == b'asdf'
-    assert nd.table.startswith('_import_')
-    assert len(nd.table) == len('_import_') + 8
-
-    # check ids are unique
-    ids = {NewData(file=Path('test.zip.csv'), checksum=b'asdf', sep=',', date='moin', lines=2).table
-           for i in range(30)}
-    assert len(ids) == 30
+import pandas as pd
 
 
 def test_extract_from_csv(mocker):
@@ -60,144 +40,69 @@ def test_extract_from_csv(mocker):
         extract_from_csv(ctx)
 
 
-def test_unusablezipfile():
-    file = Path('test.file')
-    n_files = 10
-    err = UnusableZipFile(file, n_files=n_files)
-    assert err.file == file
-    assert err.n_files == n_files 
-    assert str(file) in str(err)
-    assert str(n_files) in str(err)
 
-
-def test_open_file(mocker):
-    fake_file = mocker.Mock()
-    fake_iszip = mocker.patch('zipfile.is_zipfile')
-    fake_zip = mocker.patch('zipfile.ZipFile')
-    fake_zipfile = mocker.Mock(spec=['filelist', 'open'])
-    fake_zippedfile = mocker.Mock(spec=['file_size'])
-    fake_zippedfile.file_size = 100
-    fake_zipfile.filelist = [fake_zippedfile]
-    fake_zip.return_value = fake_zipfile
-
-    # called on a non-zip file
-    fake_iszip.return_value = False
-    nbytes, handle = open_file(fake_file)
-    fake_iszip.assert_called_once_with(fake_file)
-    assert nbytes == 0
-    assert handle == fake_file.open('rb')
+def test_adjust_format_unexpected_format():
+    """just a table layout that has nothing to do with what we'd expect
     
-    # called on a zip-file
-    fake_iszip.return_value = True
-    nbytes, handle = open_file(fake_file)
-    fake_zip.assert_called_once_with(fake_file)
-    assert nbytes == 100
-    assert handle == fake_zipfile.open(fake_zippedfile, 'r')
-
-    # called on invalid zip-files
-    for i in (0, 20):
-        fake_zipfile.filelist = [mocker.Mock()] * i
-        with pytest.raises(UnusableZipFile):
-            open_file(fake_file)
-
-
-def test_human_readable_bytes():
-    for bts, hmn in ((-1000, '0 bytes'), (100, '100 bytes'),
-                     (1001, '1.00 kB'), (1000000, '1.00 MB'),
-                     (2010000, '2.01 MB'), (1000000000, '1.00 GB'),
-                     (4199000000000, '4.20 TB')):
-        assert human_readable_bytes(bts) == hmn
+    Might happen e.g. if CSV files are read with the wrong separator.
+    """
+    dta = pd.DataFrame({'moin': [1, 2, 3, 4]})
+    with pytest.raises(dagster.Failure, match=r'Input malformed') as excinfo:
+        adjust_format(dta)
     
 
-def test_headerlacksfield():
-    err = HeaderLacksField(('test', ))
-    assert 'test' in str(err)
-    assert err.fields == ['test']
-    assert isinstance(err, CSVFormatProblem)
+@pytest.fixture
+def adjust_format_fields():
+    """Short-hand for the actually required fields"""
+    return ['TYP', 'DATUM', 'SOLLZEIT', 'ZEIT', 'FAHRZEUG', 'LINIE', 'UMLAUF',
+            'FAHRT', 'HALT', 'LATITUDE', 'LONGITUDE', 'EINSTEIGER', 'AUSSTEIGER']
 
 
-def test_unknowncsvdialect():
-    err = UnkownCSVDialect()
-    assert 'file is not in CSV format' in str(err)
-    assert isinstance(err, CSVFormatProblem)
 
-
-def test_unsupporteddateformat():
-    err = UnsupportedDateFormat('test')
-    assert err.date == 'test'
-    assert 'test' in str(err)
-    assert isinstance(err, CSVFormatProblem)
-
-
-def test_infer_format(mocker):
-    fake_handle = mocker.Mock(spec=['readline'])
-
-    # just the wrong file
-    fake_handle.readline.side_effect = iter([b'moin', b'ca', b'va?'])
-    with pytest.raises(UnkownCSVDialect):
-        infer_format(fake_handle)
-
-    # incomplete and false headers
-    fake_header = (', '.join(list(CSV_REQUIRED_FIELDS)[:6])).encode('utf-8')
-    fake_handle.readline.side_effect = iter([fake_header + b', FAKE', b'', b''])
-    with pytest.raises(HeaderLacksField) as info:
-        infer_format(fake_handle)
-    assert set(info.value.fields) == set(list(CSV_REQUIRED_FIELDS)[6:])
-
-    # wrong date format
-    fake_header = ','.join(CSV_REQUIRED_FIELDS).encode('utf-8')
-    fake_lines = ['nothing'] * len(CSV_REQUIRED_FIELDS)
-    fake_lines = ','.join(fake_lines).encode('utf-8')
-    fake_handle.readline.side_effect = iter([fake_header, fake_lines, fake_lines])
-    with pytest.raises(UnsupportedDateFormat) as info:
-        infer_format(fake_handle)
-    assert info.value.date == 'nothing'
-
-    # a valid file
-    datetypes = {
-        'DD.MM.YYYY': '04.12.2022',
-        'DD-MON-YY': '04-DEC-22',
-        'DD-Mon-YY': '04-Dec-22',
-        'DD-MON-YYYY': '04-DEC-2022',
-        'DD-Mon-YYYY': '04-Dec-2022',
-        'YYYY-MM-DD': '2022-12-04'
-    }
-    for fmt_str, date in datetypes.items():
-        # TODO: replace by more realistic test (not all fields == date)
-        fake_lines = ['nothing'] * len(CSV_REQUIRED_FIELDS)
-        fake_lines = [date] * len(CSV_REQUIRED_FIELDS)
-        fake_lines = ','.join(fake_lines).encode('utf-8')
-        fake_handle.readline.side_effect = iter([fake_header, fake_lines, fake_lines])
-        format = infer_format(fake_handle)
-        assert format['sep'] == ','
-        assert format['date'] == fmt_str
+def test_adjust_format_incomplete_headers(adjust_format_fields):
+    """Missing headers
     
-
-def test_infer_format_on_completely_empty_file(mocker):
-    # mimmick a complete
-    fake_handle = mocker.Mock(spec=['readline'])
-    fake_handle.readline.side_effect = iter([b'', b'', b''])
-    with pytest.raises(FileIsEmpty):
-        infer_format(fake_handle)
-
-
-def test_infer_format_on_correct_but_empty_file(mocker):
-    # mimmick a correctly formed but otherwise empty file
-    fake_handle = mocker.Mock(spec=['readline'])
-    fake_header = (', '.join(list(CSV_REQUIRED_FIELDS))).encode('utf-8')
-    fake_handle.readline.side_effect = iter([fake_header, b'', b''])
-    with pytest.raises(FileHasNoData):
-        infer_format(fake_handle)
+    Provides a partial file with only two headers (but the correcto ones)
+    """
+    dta = pd.DataFrame({f: [1, 2, 3, 4] for f in adjust_format_fields[:2]})
+    with pytest.raises(dagster.Failure):
+        adjust_format(dta)
     
+    
+def test_adjust_format_false_headers(adjust_format_fields):
+    """simulates a typo in one header"""
+    dta = pd.DataFrame({(k + 'Z' if i==5 else ''): [1, 2, 3, 4] for i, k in enumerate(adjust_format_fields)})
+    with pytest.raises(dagster.Failure):
+        adjust_format(dta)
 
-def test_compute_checksum(mocker):
-    fake_handle = mocker.Mock(spec=['seek', 'read'])
-    chunk = b'abcdefghijklmnopqrstuvwxyzABCD'
-    fake_handle.read.side_effect = (chunk if i < 99 else None for i in range(100))
-    fake_hash = mocker.patch('hashlib.sha256', spec=['update', 'digest'])
-    result = compute_checksum(fake_handle, file_hash=fake_hash, chunk_size=len(chunk))
-    fake_hash.update.assert_called_with(chunk)
-    assert fake_hash.update.call_count == 99
-    fake_handle.seek.assert_called_with(0)
-    assert fake_handle.seek.call_count == 2
-    fake_hash.digest.assert_called_once_with()
+
+def test_adjust_format_all_numbers(adjust_format_fields):
+    """correct headers, but will numbers; passes, even though result-datatypes don't make sense"""
+    #TODO: add better input file validation
+    dta = pd.DataFrame({k: [1, 2, 3, 4] for k in adjust_format_fields})
+    _check_types(dta)
+
+
+def test_adjust_format_real_data():
+    """try with the testing data use in live-tests.yaml"""
+    dta = pd.read_csv('tests/testdata.csv.zip', sep=';')
+    _check_types(dta)
+
+
+def _check_types(dta):
+    res = adjust_format(dta)    
+    for ks, t in {
+        ('type', 'vehicle', 'line', 'sortie', 'run', 'stop'): 'category',
+        ('time', 'expected_time'): 'datetime64[ns]',
+        ('latitude', 'longitude'): 'float',
+        ('count_people_boarding', 'count_people_disembarking'): 'Int16'
+    }.items():
+        for k in ks:
+            assert res.dtypes[k] == t
+
+
+def test_find_duplicates():
+    """Basic functional test."""
+    dta = pd.DataFrame({'vehicle': [1, 1, 1, 1], 'time': [1, 1, 2, 3], 'type': [-1, 0, -1, -1]})
+    dupl = find_duplicates(dta)
+    

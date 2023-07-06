@@ -10,4 +10,4 @@ def test_resources():
 
 def test_initialize():
     rd = busspeeds()
-    assert rd.has_job('mapmatch_bus_data')
+    assert rd.has_job('process_busdata')

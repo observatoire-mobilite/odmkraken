@@ -2,20 +2,16 @@ import dagster
 import typing
 from datetime import datetime, timedelta
 from mapmatcher import Itinerary, reconstruct_optimal_path, ProjectLinear, Scorer, candidate_solution
+import mapmatcher.errors
 from odmkraken.resources.edmo.busdata import VehicleTimeFrame
 from functools import partial
+import multiprocessing as mp
+from dataclasses import dataclass
+import uuid
 
 
 # fields: vehicle_id, from_node, to_node, t_enter, dt_travers
 RESULT_LIST = typing.List[typing.Tuple[int, int, int, datetime, timedelta]]
-
-
-@dagster.op(out=dagster.DynamicOut(), required_resource_keys={'edmo_vehdata'},
-            config_schema={'date_from': str, 'date_to': str})
-def load_vehicle_timeframes(context: dagster.OpExecutionContext) -> typing.Iterator[dagster.DynamicOutput[VehicleTimeFrame]]:
-    dates = context.op_config['date_from'], context.op_config['date_to']
-    for tf in context.resources.edmo_vehdata.get_timeframes_on(*dates):
-        yield dagster.DynamicOutput(tf, mapping_key=str(tf.id.hex))
 
 
 def get_nearby_roads(t: datetime, x: float, y: float, context: dagster.OpExecutionContext):
@@ -24,34 +20,61 @@ def get_nearby_roads(t: datetime, x: float, y: float, context: dagster.OpExecuti
         roads = [candidate_solution(*r, t) for r in roads]
         if roads:
             break
-    if (r >= 500):
-        context.log.warn(f'Increased search radius to {r:.1f}m around (x={x:.1f}, y={y:.1f})')
+    if (r > 100):
+        print(f'Increased search radius to {r:.1f}m around (x={x:.1f}, y={y:.1f}) at t={t}')
     return roads
 
 
-@dagster.op(
-    required_resource_keys={'edmo_vehdata', 'shortest_path_engine'},
-    out=dagster.Out(io_manager_key='edmo_mapmatching_results')
+class MapMatcher:
+
+    def __init__(self, dsn: str):
+        pass
+        
+
+    @property
+    def vehicle_id(self) -> int:
+        return self.timeframe.vehicle_id
+
+    def run(self, context: dagster.OpExecutionContext):
+        try:
+            self._mapmatch(context, self.timeframe)
+        except Exception as e:
+            self.success = False
+        
+    def _mapmatch(context, tf) -> MapMatchResult:
+        scorer = Scorer()
+        spe = context.resources.shortest_path_engine
+        nearby_roads = partial(get_nearby_roads, context=context)
+        store = context.resources.edmo_vehdata.store_results
+        
+        with context.resources.edmo_vehdata.get_pings(tf) as cur:
+            path = reconstruct_optimal_path(cur, nearby_roads, shortest_path_engine=spe, scorer=scorer)
+
+        # reproject in the perspective of the road segments
+        projector = ProjectLinear()
+        pathway = projector.project(path)
+
+        results = [(tf.vehicle_id, *p) for p in pathway]
+        store(results)
+
+
+@dagster.asset(
+    required_resource_keys={'edmo_vehdata', 'shortest_path_engine'}
 )
-def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> RESULT_LIST:
-
-    # just some aliases
-    nearby_roads = partial(get_nearby_roads, context=context)  # allows to externalize code for testing
-    scorer = Scorer()
-    spe = context.resources.shortest_path_engine
-
-    # reconstruct path over road segments
-    with context.resources.edmo_vehdata.get_pings(vehicle_timeframe) as cur:
-        path = reconstruct_optimal_path(cur, nearby_roads, shortest_path_engine=spe, scorer=scorer)
+def most_likely_path(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> typing.List[typing.Tuple['uuid.UUID', bool, str]]:
     
-    # reproject in the perspective of the road segments
-    projector = ProjectLinear()
-    pathway = projector.project(path)
-    return [(vehicle_timeframe.vehicle_id, *p) for p in pathway]
+    # retrieve timeframes
+    dates = context.op_config['date_from'], context.op_config['date_to']
+    frames = context.resources.edmo_vehdata.get_timeframes_on(*dates)
+
+    # map to multi-prcessing
+    with mp.Pool() as pool:
+        res = pool.map(MapMatchResult, frames)
+    return log
 
 
 @dagster.op(required_resource_keys={'edmo_vehdata'})
-def extract_halts(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame):
+def extract_halts(context: dagster.OpExecutionContext, vehicle_timeframe: VehicleTimeFrame) -> None:
     context.resources.edmo_vehdata.extract_halts(vehicle_timeframe)
 
 
@@ -62,8 +85,16 @@ def mapmatch_config(start: datetime, end: datetime):
     return {'ops': {'load_vehicle_timeframes': {'config': config }}}
 
 
-@dagster.graph()
-def mapmatch_bus_data():
+@dagster.graph(out={
+    'most_likely_path': dagster.GraphOut(), 
+    'extract_halts': dagster.GraphOut()
+})
+def mapmatch_bus_data() -> typing.Tuple[typing.List[VehicleTimeFrame], typing.List[bool]]:
     timeframes = load_vehicle_timeframes()
-    timeframes.map(most_likely_path)
-    timeframes.map(extract_halts)
+    r1 = timeframes.map(most_likely_path)
+    r2 = timeframes.map(extract_halts)
+    return {'most_likely_path': r1, 'extract_halts': r2}
+
+
+#mapmatched_data = dagster.AssetsDefinition.from_graph(mapmatch_bus_data)
+

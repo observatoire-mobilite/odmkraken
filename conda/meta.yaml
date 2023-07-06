@@ -17,6 +17,10 @@ requirements:
     - dagster >=1.0.10
     - psycopg2
     - mapmatcher
+    - pandas
+    - pyarrow
+    - geopandas
+    - paramiko
   build:
     - pip
     - setuptools >=56

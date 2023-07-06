@@ -138,6 +138,13 @@ class EDMOVehData(EDMOData):
                 sql.drop_staging_table(staging_table=table, schema=self.vehdata_schema)
             )
 
+    def store_results(self, context: dagster.OutputContext, data):
+        """Store new results in database.
+
+        Beware: the primary key on `vehicle_id` and `t_enter` will cause this to fail
+        if you try to overwrite results.
+        """
+        self.store.execute_batch(sql.add_results(schema=self.vehdata_schema), data)
 
 @dagster.resource(required_resource_keys={'local_postgres'})
 def edmo_vehdata(init_context: dagster.InitResourceContext) -> EDMOVehData:
