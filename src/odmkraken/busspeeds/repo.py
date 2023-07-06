@@ -17,7 +17,12 @@ def busspeeds():
                 most_likely_path
             ],
             resource_defs={'icts_data_manager': icts_data_manager,
-                           'pandas_data_manager': pandas_parquet_manager}
+                           'pandas_data_manager': pandas_parquet_manager},
+            resource_config_by_key={
+                'icts_data_manager': { 'config': {
+                    'base_path': {'env': 'ICTS_DATA_PATH'}
+                }}
+            }
         ),
         dagster.define_asset_job(
             name='process_busdata', 

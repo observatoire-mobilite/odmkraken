@@ -33,46 +33,28 @@ class ICTSDataManager(dagster.IOManager):
         self.extension = str(extension)
         self.dt = int(dt)
 
-    def files_in_partition(self, partition_key: str, must_exist: bool=True) -> typing.Iterator[Path]:
-        """Convert partition key to file name using Init's naming convention.
-    
-        Data for the day referred to by `partition_key` is stored in 
-        a file whose name starts with 8 digits that represent presumably
-        the day of the file's creation, which seems to be 5 days after
-        the data were recorded, i.e. `partition_key` + 5 days. That is
-        followed by digits $180000 + i$ where $i$ is an integer and $i > 0$,
-        where $i$ is usually $1$ but can take other values, either because
-        there are several files for a date, or it sometimes just is 2.
-        Finally, there is the constant suffix '_LUXGPS.csv.zip' 
-        is the day on which the desired data were recorded (usually 3-4am
-        to 4-5am the next day).
-
-        Arguments:
-            partition_key: the intended partition
-            must_exist: if False, yield also files that do not exist
-        """
-        for i in range(self.min_i, self.max_i + 1):
-            t = datetime.fromisoformat(partition_key) + timedelta(days=self.dt)
-            file = Path(t.strftime(f'%Y%m%d{180000 + i}_LUXGPS'))
-            file = self.root / file.with_suffix(self.extension)
-            if must_exist and not file.exists():
-                continue
-            yield file
-
     def handle_output(self, context: dagster.OutputContext, obj: pd.DataFrame):
         """Output is not implemented."""
         raise NotImplementedError('code was never intended to reproduce datafiles')
 
     def load_input(self, context: dagster.InputContext) -> pd.DataFrame:
-        """This reads a dataframe from a CSV."""
+        """This reads a dataframe from a CSV.
+        
+        Data for the day referred to by `context._asset_partition_key` is 
+        stored in  a file whose name starts with 8 digits that represent 
+        presumably the day of the file's creation, which seems to be 5 days after
+        the data were recorded. That is followed by some code whose meaning
+        I do not understand. Finally, there is the constant suffix 
+        '_LUXGPS.csv.zip'. This just does `Path.glob` for that.
+        """
         if not context.has_partition_key:
             raise NotImplementedError('code was never intended to be used without partitions')
 
-        dta = [pd.read_csv(file, low_memory=False, sep=';', memory_map=True)
-               for file in self.files_in_partition(context.asset_partition_key)]
+        t = datetime.fromisoformat(context.asset_partition_key) + timedelta(days=self.dt)
+        pattern = t.strftime(f'%Y%m%d*_LUXGPS{self.extension}')
+        dta = [pd.read_csv(file, low_memory=False, sep=';', memory_map=True) for file in self.root.glob(pattern)]
 
         if not dta:
-            files = list(self.files_in_partition(context.asset_partition_key, must_exist=False))
             raise dagster.Failure(
                 description='No files found matching specified partition',
                 metadata={
@@ -80,14 +62,13 @@ class ICTSDataManager(dagster.IOManager):
                     'asset key': '/'.join(context.asset_key.path),
                     'partition key': str(context.asset_partition_key),
                     'search path': self.root.absolute(),
-                    'first file checked': files[0].name,
-                    'last file checked': files[-1].name
+                    'search pattern': pattern
             })
 
         return pd.concat(dta)
 
 
-@dagster.io_manager(config_schema={'base_path': dagster.Field(str, is_required=False)})
+@dagster.io_manager(config_schema={'base_path': dagster.Field(dagster.StringSource, is_required=False)})
 def icts_data_manager(init_context: dagster.InitResourceContext):
     """Create a configured ICTS data manager."""
     root = init_context.resource_config.get('base_path', '.')
